@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { LogoIcon } from './components/Icons';
+import { LogoIcon, SparklesIcon } from './components/Icons';
 import { loginUser } from './services/userService';
 import Spinner from './components/common/Spinner';
 import { type User } from './types';
@@ -34,31 +35,47 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-neutral-100 dark:bg-neutral-900 p-4">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-neutral-950 rounded-xl shadow-lg border border-neutral-200 dark:border-neutral-800">
-                <div className="text-center">
-                    <LogoIcon className="w-48 mx-auto mb-4 text-neutral-800 dark:text-neutral-200" />
-                    <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">
-                        {T.title}
-                    </h1>
-                     <p className="mt-2 text-neutral-600 dark:text-neutral-400">
-                        {T.subtitle}
-                    </p>
-                </div>
+        <div className="relative flex items-center justify-center min-h-screen bg-[#050505] overflow-hidden p-4">
+            
+            {/* Background Ambient Glows */}
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-start/20 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-end/10 rounded-full blur-[120px] pointer-events-none animate-float"></div>
 
-                <>
-                    {error && <p className="text-center text-sm text-red-500 dark:text-red-400 p-3 bg-red-500/10 rounded-md">{error}</p>}
+            {/* Login Card */}
+            <div className="w-full max-w-md relative z-10">
+                <div className="bg-[#0a0a0a]/80 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] p-8 sm:p-10 relative overflow-hidden">
                     
-                    <form className="mt-6 space-y-4" onSubmit={handleLogin}>
-                         <div>
-                            <label htmlFor="email-input" className="sr-only">{T.emailPlaceholder}</label>
+                    {/* Top Gradient Line Decoration */}
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-brand-start to-transparent opacity-50"></div>
+
+                    <div className="text-center mb-8">
+                        <div className="inline-flex justify-center mb-6 filter drop-shadow-[0_0_15px_rgba(74,108,247,0.3)]">
+                            <LogoIcon className="w-40 text-white" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">
+                            {T.title}
+                        </h1>
+                         <p className="mt-2 text-sm text-neutral-400">
+                            {T.subtitle}
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+                            <p className="text-xs font-medium text-red-400">{error}</p>
+                        </div>
+                    )}
+                    
+                    <form className="space-y-6" onSubmit={handleLogin}>
+                         <div className="space-y-2">
+                            <label htmlFor="email-input" className="text-xs font-bold text-neutral-500 uppercase tracking-wider ml-1">Email Address</label>
                             <input
                                 id="email-input"
                                 type="email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 placeholder-neutral-500 text-neutral-900 dark:text-neutral-200 focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-brand-start/50 focus:border-brand-start/50 transition-all font-medium"
                                 placeholder={T.emailPlaceholder}
                                 disabled={isLoading}
                              />
@@ -68,27 +85,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                                className="group relative w-full flex justify-center items-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-brand-start to-brand-end text-white font-bold shadow-[0_0_20px_rgba(74,108,247,0.3)] hover:shadow-[0_0_30px_rgba(74,108,247,0.5)] hover:scale-[1.01] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
                             >
-                                {isLoading ? <Spinner /> : T.loginButton}
+                                {isLoading ? <Spinner /> : (
+                                    <>
+                                        {T.loginButton}
+                                        <SparklesIcon className="w-4 h-4 text-white/70" />
+                                    </>
+                                )}
                             </button>
                         </div>
                     </form>
 
-                    <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800 text-center">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">{T.noAccount}</p>
+                    <div className="mt-8 pt-6 border-t border-white/5 text-center">
+                        <p className="text-xs text-neutral-500 mb-4">{T.noAccount}</p>
                         <a
                             href="https://monoklix.com/step/checkout/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full inline-block py-3 px-4 border border-primary-500 text-sm font-medium rounded-md text-primary-600 dark:text-primary-400 hover:bg-primary-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:ring-offset-neutral-950 focus:ring-primary-500 transition-colors"
+                            className="w-full inline-block py-3 px-4 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-semibold text-neutral-300 hover:text-white transition-all"
                         >
                             {T.registerButton}
                         </a>
                     </div>
-                </>
-                 <p className="text-center text-xs text-neutral-500 dark:text-neutral-400 !mt-8">
-                    © 2025 MONOklix.com ({APP_VERSION})
+                </div>
+                
+                 <p className="text-center text-[10px] text-neutral-600 font-mono mt-6 uppercase tracking-widest">
+                    System Secured • {APP_VERSION}
                 </p>
             </div>
         </div>
