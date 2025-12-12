@@ -11,7 +11,7 @@ import LoginPage from './LoginPage';
 import { GalleryView } from './components/views/GalleryView';
 import WelcomeAnimation from './components/WelcomeAnimation';
 import { RefreshCwIcon, TerminalIcon, SunIcon, MoonIcon, AlertTriangleIcon, CheckCircleIcon, XIcon, SparklesIcon, MenuIcon } from './components/Icons';
-import { signOutUser, logActivity, getVeoAuthTokens, getSharedMasterApiKey, updateUserLastSeen, assignPersonalTokenAndIncrementUsage, saveUserPersonalAuthToken, updateUserProxyServer, getAvailableServersForUser, getDeviceOS, getServerUsageCounts } from './services/userService';
+import { signOutUser, logActivity, getVeoAuthTokens, getSharedMasterApiKey, updateUserLastSeen, assignPersonalTokenAndIncrementUsage, saveUserPersonalAuthToken, updateUserProxyServer, getAvailableServersForUser, getDeviceOS, getServerUsageCounts, getUserProfile } from './services/userService';
 import Spinner from './components/common/Spinner';
 import { loadData, saveData } from './services/indexedDBService';
 import { GetStartedView } from './components/views/GetStartedView';
@@ -125,6 +125,25 @@ const App: React.FC = () => {
         setSessionChecked(true);
         setIsApiKeyLoading(false);
   }, []);
+
+  // AUTO-SYNC: Fetch fresh profile from DB on load to ensure personalAuthToken is up to date
+  useEffect(() => {
+      if (currentUser?.id) {
+          getUserProfile(currentUser.id).then(freshUser => {
+              if (freshUser) {
+                  // If the DB has a token but local doesn't, or they differ, update local.
+                  if (freshUser.personalAuthToken !== currentUser.personalAuthToken) {
+                      console.log('[Auto-Sync] Syncing newer token from DB to local session.');
+                      handleUserUpdate(freshUser);
+                  }
+                  // Also update status or other fields if they changed
+                  if (freshUser.status !== currentUser.status) {
+                      handleUserUpdate(freshUser);
+                  }
+              }
+          }).catch(err => console.error("Background profile sync failed", err));
+      }
+  }, [currentUser?.id, handleUserUpdate]);
 
   // Initialize System Resources (API Key, Proxy Server, Veo Tokens)
   useEffect(() => {
@@ -252,7 +271,14 @@ const App: React.FC = () => {
   };
 
   if (!sessionChecked || isApiKeyLoading) return <div className="flex items-center justify-center min-h-screen bg-[#050505]"><Spinner /></div>;
-  if (!currentUser) return <LoginPage onLoginSuccess={(u) => { setCurrentUser(u); setJustLoggedIn(true); }} />;
+  
+  if (!currentUser) return <LoginPage onLoginSuccess={(u) => { 
+      // CRITICAL FIX: Save to localStorage immediately upon login to ensure API client can read it.
+      localStorage.setItem('currentUser', JSON.stringify(u));
+      setCurrentUser(u); 
+      setJustLoggedIn(true); 
+  }} />;
+  
   if (isShowingWelcome) return <WelcomeAnimation onAnimationEnd={() => { setIsShowingWelcome(false); setActiveView('home'); }} />;
 
   // Determine if the current view should have a fixed desktop layout (Suite) or scrollable page (Home)
