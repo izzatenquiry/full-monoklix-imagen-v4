@@ -72,6 +72,7 @@ const App: React.FC = () => {
   const [veoTokenRefreshedAt, setVeoTokenRefreshedAt] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
   const isAssigningTokenRef = useRef(false);
+  const hasAssignedTokenRef = useRef(false);
   const [needsSilentTokenAssignment, setNeedsSilentTokenAssignment] = useState(false);
   const [showServerModal, setShowServerModal] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -196,21 +197,26 @@ const App: React.FC = () => {
             }
         }
 
-        // 3. Auto-assign Random Token (Every Login)
-        // Fetch 10 latest tokens and assign one randomly to the user
-        assignRandomTokenToUser(currentUser.id).then(result => {
-            if (result.success) {
-                console.log(`[Init] ✅ Auto-assigned token ending in ...${result.token.slice(-6)} to user ${currentUser.id}`);
-                // Update currentUser with the new token
-                const updatedUser = { ...currentUser, personalAuthToken: result.token };
-                setCurrentUser(updatedUser);
-                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-            } else {
-                console.warn(`[Init] ⚠️ Failed to auto-assign token: ${result.message}`);
-            }
-        }).catch(err => {
-            console.error('[Init] ❌ Error during token auto-assignment:', err);
-        });
+        // 3. Auto-assign Random Token (Only once per session, if user doesn't have token)
+        // Only assign if user doesn't have a token and we haven't assigned one yet in this session
+        if (!currentUser.personalAuthToken && !isAssigningTokenRef.current && !hasAssignedTokenRef.current) {
+            isAssigningTokenRef.current = true;
+            hasAssignedTokenRef.current = true;
+            assignRandomTokenToUser(currentUser.id).then(result => {
+                if (result.success) {
+                    console.log(`[Init] ✅ Auto-assigned token ending in ...${result.token.slice(-6)} to user ${currentUser.id}`);
+                    // Update currentUser with the new token - but don't trigger this effect again
+                    handleUserUpdate(result.user);
+                } else {
+                    console.warn(`[Init] ⚠️ Failed to auto-assign token: ${result.message}`);
+                }
+                isAssigningTokenRef.current = false;
+            }).catch(err => {
+                console.error('[Init] ❌ Error during token auto-assignment:', err);
+                isAssigningTokenRef.current = false;
+                hasAssignedTokenRef.current = false; // Reset on error so it can retry
+            });
+        }
 
         // 4. Veo Tokens (Background)
         getVeoAuthTokens().then(tokens => {
@@ -224,7 +230,7 @@ const App: React.FC = () => {
     if (currentUser) {
         initSystem();
     }
-  }, [currentUser, activeApiKey]);
+  }, [currentUser?.id, activeApiKey]); // Only depend on user ID, not the whole user object
 
 
   // --- VIEW RENDERING WITH NEW LAYOUT ---

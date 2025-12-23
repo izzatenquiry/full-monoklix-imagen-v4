@@ -592,32 +592,38 @@ export const fetchLatestTokens = async (): Promise<string[]> => {
  */
 export const assignRandomTokenToUser = async (userId: string): Promise<{ success: true; user: User; token: string } | { success: false; message: string }> => {
     try {
-        // Step 1: Fetch the latest 10 tokens
+        // Step 1: Fetch the latest 10 tokens and save them
         const latestTokens = await fetchLatestTokens();
         
         if (latestTokens.length === 0) {
             return { success: false, message: 'No tokens available in the database.' };
         }
 
-        // Step 2: Randomly select one token from the 10
-        const randomIndex = Math.floor(Math.random() * latestTokens.length);
-        const selectedToken = latestTokens[randomIndex];
-        
-        console.log(`[Token Auto-Assign] Fetched ${latestTokens.length} tokens, randomly selected token ending in ...${selectedToken.slice(-6)}`);
+        console.log(`[Token Auto-Assign] Fetched ${latestTokens.length} tokens, will try them one by one if needed`);
 
-        // Step 3: Directly assign the selected token without limit check
-        // User requested no limit - just assign any available token
-        console.log(`[Token Auto-Assign] Attempt 1/1: Assigning token ending in ...${selectedToken.slice(-6)}`);
+        // Step 2: Try to assign tokens one by one from the pool
+        // Start with random token, then try others if failed
+        const randomIndex = Math.floor(Math.random() * latestTokens.length);
         
-        const result = await saveUserPersonalAuthToken(userId, selectedToken);
-        
-        if (result.success) {
-            console.log(`[Token Auto-Assign] ✅ Successfully assigned token ending in ...${selectedToken.slice(-6)} to user ${userId}`);
-            return { success: true, user: result.user, token: selectedToken };
-        } else {
-            console.log(`[Token Auto-Assign] ⚠️ Failed to assign token ending in ...${selectedToken.slice(-6)}: ${result.message}`);
-            return { success: false, message: result.message || 'Failed to assign token.' };
+        for (let i = 0; i < latestTokens.length; i++) {
+            const tokenIndex = (randomIndex + i) % latestTokens.length;
+            const tokenToTry = latestTokens[tokenIndex];
+            
+            console.log(`[Token Auto-Assign] Attempt ${i + 1}/${latestTokens.length}: Trying token ending in ...${tokenToTry.slice(-6)}`);
+            
+            const result = await saveUserPersonalAuthToken(userId, tokenToTry);
+            
+            if (result.success) {
+                console.log(`[Token Auto-Assign] ✅ Successfully assigned token ending in ...${tokenToTry.slice(-6)} to user ${userId}`);
+                return { success: true, user: result.user, token: tokenToTry };
+            } else {
+                console.log(`[Token Auto-Assign] ⚠️ Failed to assign token ending in ...${tokenToTry.slice(-6)}: ${result.message}. Trying next token...`);
+                // Continue to next token
+            }
         }
+
+        // If all tokens failed
+        return { success: false, message: `Failed to assign token after trying all ${latestTokens.length} tokens.` };
         
     } catch (error) {
         const message = getErrorMessage(error);
