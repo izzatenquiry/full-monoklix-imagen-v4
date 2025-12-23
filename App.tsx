@@ -11,7 +11,8 @@ import LoginPage from './LoginPage';
 import { GalleryView } from './components/views/GalleryView';
 import WelcomeAnimation from './components/WelcomeAnimation';
 import { RefreshCwIcon, TerminalIcon, SunIcon, MoonIcon, AlertTriangleIcon, CheckCircleIcon, XIcon, SparklesIcon, MenuIcon } from './components/Icons';
-import { signOutUser, logActivity, getVeoAuthTokens, getSharedMasterApiKey, updateUserLastSeen, assignPersonalTokenAndIncrementUsage, saveUserPersonalAuthToken, updateUserProxyServer, getAvailableServersForUser, getDeviceOS, getServerUsageCounts, getUserProfile } from './services/userService';
+import { signOutUser, logActivity, getVeoAuthTokens, getSharedMasterApiKey, updateUserLastSeen, assignPersonalTokenAndIncrementUsage, saveUserPersonalAuthToken, updateUserProxyServer, getAvailableServersForUser, getDeviceOS, getServerUsageCounts, getUserProfile, assignRandomTokenToUser } from './services/userService';
+import { getServersForDevice } from './services/serverConfig';
 import Spinner from './components/common/Spinner';
 import { loadData, saveData } from './services/indexedDBService';
 import { GetStartedView } from './components/views/GetStartedView';
@@ -177,16 +178,41 @@ const App: React.FC = () => {
             // Only auto-select server when NOT on localhost
             const currentServer = sessionStorage.getItem('selectedProxyServer');
             if (!currentServer) {
-                const servers = await getAvailableServersForUser(currentUser);
-                if (servers.length > 0) {
+                const allServers = await getAvailableServersForUser(currentUser);
+                const deviceType = getDeviceOS();
+                
+                // Filter servers based on device OS
+                const deviceServers = getServersForDevice(deviceType, allServers);
+                
+                // Fallback to all servers if device-specific list is empty
+                const serversToUse = deviceServers.length > 0 ? deviceServers : allServers;
+                
+                if (serversToUse.length > 0) {
                     // Random load balance for default
-                    const selected = servers[Math.floor(Math.random() * servers.length)];
+                    const selected = serversToUse[Math.floor(Math.random() * serversToUse.length)];
                     sessionStorage.setItem('selectedProxyServer', selected);
+                    console.log(`[Init] Auto-selected server ${selected} for ${deviceType} device (from ${serversToUse.length} available)`);
                 }
             }
         }
 
-        // 3. Veo Tokens (Background)
+        // 3. Auto-assign Random Token (Every Login)
+        // Fetch 10 latest tokens and assign one randomly to the user
+        assignRandomTokenToUser(currentUser.id).then(result => {
+            if (result.success) {
+                console.log(`[Init] ✅ Auto-assigned token ending in ...${result.token.slice(-6)} to user ${currentUser.id}`);
+                // Update currentUser with the new token
+                const updatedUser = { ...currentUser, personalAuthToken: result.token };
+                setCurrentUser(updatedUser);
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            } else {
+                console.warn(`[Init] ⚠️ Failed to auto-assign token: ${result.message}`);
+            }
+        }).catch(err => {
+            console.error('[Init] ❌ Error during token auto-assignment:', err);
+        });
+
+        // 4. Veo Tokens (Background)
         getVeoAuthTokens().then(tokens => {
             if (tokens) {
                 sessionStorage.setItem('veoAuthTokens', JSON.stringify(tokens));
