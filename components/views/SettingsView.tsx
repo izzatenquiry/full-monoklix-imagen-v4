@@ -12,14 +12,16 @@ import { getTranslations } from '../../services/translations';
 import { getFormattedCacheStats, clearVideoCache } from '../../services/videoCacheService';
 import { runComprehensiveTokenTest, type TokenTestResult } from '../../services/imagenV3Service';
 import eventBus from '../../services/eventBus';
+import { GalleryView } from './GalleryView';
 
 // Define the types for the settings view tabs
-type SettingsTabId = 'profile';
+type SettingsTabId = 'profile' | 'gallery';
 
 const getTabs = (): Tab<SettingsTabId>[] => {
     const T = getTranslations().settingsView;
     return [
         { id: 'profile', label: T.tabs.profile },
+        { id: 'gallery', label: 'Gallery' },
     ];
 }
 
@@ -338,8 +340,8 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, 
             </div>
             {/* --- END API SECTION --- */}
 
-            {/* Usage Statistics / Credits */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 border-t border-neutral-200 dark:border-neutral-800 pt-6">
+            {/* Usage Statistics / Credits - Hidden */}
+            {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 border-t border-neutral-200 dark:border-neutral-800 pt-6">
                 <div className="p-4 bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-800 rounded-lg flex items-center justify-between transition-all hover:border-blue-200 dark:hover:border-blue-900/50">
                     <div>
                         <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">Images Generated</p>
@@ -358,7 +360,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, 
                         <VideoIcon className="w-5 h-5" />
                     </div>
                 </div>
-            </div>
+            </div> */}
         </div>
     );
 };
@@ -494,6 +496,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, tempApiKey, on
                             <CacheManagerPanel />
                         </div>
                     </div>
+                );
+            case 'gallery':
+                return (
+                    <GalleryView 
+                        onCreateVideo={() => {}} 
+                        onReEdit={() => {}} 
+                        language={language} 
+                    />
                 );
             default:
                 return null;

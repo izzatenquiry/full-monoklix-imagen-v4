@@ -13,7 +13,8 @@ import {
     LogoutIcon,
     XIcon,
     LogoIcon,
-    UserIcon
+    UserIcon,
+    SparklesIcon
 } from './Icons';
 import { getTranslations } from '../services/translations';
 
@@ -30,11 +31,10 @@ const MAIN_NAV_ITEMS = [
   { id: 'home', icon: HomeIcon, label: 'Home' },
   { id: 'ai-text-suite', icon: FileTextIcon, label: 'Text' },
   { id: 'ai-image-suite', icon: ImageIcon, label: 'Image' },
-  { id: 'gallery', icon: GalleryIcon, label: 'Gallery' },
+  { id: 'ai-prompt-library-suite', icon: SparklesIcon, label: 'Library' },
 ];
 
 const SYSTEM_MODULES = [
-    { id: 'ai-prompt-library-suite', icon: LibraryIcon, label: 'Library' },
     { id: 'settings', icon: SettingsIcon, label: 'Settings' },
 ];
 

@@ -415,7 +415,7 @@ const App: React.FC = () => {
                 {activeView === 'home' && announcements.length > 0 && (
                      <div className="mb-6 mx-auto max-w-[1600px] w-full bg-brand-start/10 dark:bg-brand-start/10 border border-brand-start/30 dark:border-brand-start/20 text-brand-start dark:text-white p-2 rounded-xl shadow-[0_0_15px_rgba(74,108,247,0.1)] dark:shadow-[0_0_15px_rgba(74,108,247,0.2)] flex items-center gap-3 animate-zoomIn relative overflow-hidden group">
                         {/* Static Label */}
-                        <div className="flex-shrink-0 z-10 bg-neutral-900 dark:bg-[#0d1117] pr-4 pl-2 py-1 flex items-center gap-2 shadow-lg">
+                        <div className="flex-shrink-0 z-10 pr-4 pl-2 py-1 flex items-center gap-2">
                              <span className="bg-brand-start px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-lg text-white">New</span>
                         </div>
                         {/* Marquee Content */}
