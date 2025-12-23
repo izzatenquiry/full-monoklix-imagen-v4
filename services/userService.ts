@@ -605,31 +605,19 @@ export const assignRandomTokenToUser = async (userId: string): Promise<{ success
         
         console.log(`[Token Auto-Assign] Fetched ${latestTokens.length} tokens, randomly selected token ending in ...${selectedToken.slice(-6)}`);
 
-        // Step 3: Try to assign the selected token
-        // If assignment fails (e.g., token limit reached), try the next token
-        let attempts = 0;
-        const maxAttempts = Math.min(latestTokens.length, 5); // Try up to 5 tokens
+        // Step 3: Directly assign the selected token without limit check
+        // User requested no limit - just assign any available token
+        console.log(`[Token Auto-Assign] Attempt 1/1: Assigning token ending in ...${selectedToken.slice(-6)}`);
         
-        for (let i = 0; i < maxAttempts; i++) {
-            const tokenIndex = (randomIndex + i) % latestTokens.length;
-            const tokenToTry = latestTokens[tokenIndex];
-            
-            attempts++;
-            console.log(`[Token Auto-Assign] Attempt ${attempts}/${maxAttempts}: Trying token ending in ...${tokenToTry.slice(-6)}`);
-            
-            const result = await assignPersonalTokenAndIncrementUsage(userId, tokenToTry);
-            
-            if (result.success) {
-                console.log(`[Token Auto-Assign] ✅ Successfully assigned token ending in ...${tokenToTry.slice(-6)} to user ${userId}`);
-                return { success: true, user: result.user, token: tokenToTry };
-            } else {
-                console.log(`[Token Auto-Assign] ⚠️ Failed to assign token ending in ...${tokenToTry.slice(-6)}: ${result.message}`);
-                // Continue to next token
-            }
+        const result = await saveUserPersonalAuthToken(userId, selectedToken);
+        
+        if (result.success) {
+            console.log(`[Token Auto-Assign] ✅ Successfully assigned token ending in ...${selectedToken.slice(-6)} to user ${userId}`);
+            return { success: true, user: result.user, token: selectedToken };
+        } else {
+            console.log(`[Token Auto-Assign] ⚠️ Failed to assign token ending in ...${selectedToken.slice(-6)}: ${result.message}`);
+            return { success: false, message: result.message || 'Failed to assign token.' };
         }
-
-        // If all attempts failed
-        return { success: false, message: `Failed to assign token after ${attempts} attempts. All tokens may have reached their usage limit.` };
         
     } catch (error) {
         const message = getErrorMessage(error);
