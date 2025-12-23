@@ -441,12 +441,12 @@ const VideoGenerationView: React.FC<VideoGenerationViewProps> = ({ preset, clear
   const leftPanel = (
     <>
         <div>
-            <h1 className="text-xl font-bold sm:text-3xl">AI Video Generator</h1>
+            <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">AI Video Generator</h1>
             <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">Create high-quality videos from text or images.</p>
         </div>
         
         <div>
-            <h2 className="text-lg font-semibold mb-2">Model & Format</h2>
+            <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Model & Format</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Aspect Ratio</label>
@@ -465,7 +465,7 @@ const VideoGenerationView: React.FC<VideoGenerationViewProps> = ({ preset, clear
         </div>
 
         <div>
-            <h2 className="text-lg font-semibold mb-2">Reference Image (Optional)</h2>
+            <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Reference Image (Optional)</h2>
             {previewUrl ? (
                  <div className="relative w-full aspect-video rounded-lg overflow-hidden">
                     <img src={previewUrl} alt="Reference Preview" className="w-full h-full object-contain bg-neutral-100 dark:bg-neutral-800" />
@@ -483,7 +483,7 @@ const VideoGenerationView: React.FC<VideoGenerationViewProps> = ({ preset, clear
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold mb-2">Main Prompt</h2>
+          <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Main Prompt</h2>
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g., A futuristic city with flying cars at dusk..." rows={5} className="w-full bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg p-3 focus:ring-2 focus:ring-primary-500 focus:outline-none transition" />
         </div>
         
@@ -496,7 +496,7 @@ const VideoGenerationView: React.FC<VideoGenerationViewProps> = ({ preset, clear
         />
 
         <div className="space-y-4 pt-4 mt-4 border-t border-gray-200 dark:border-neutral-700">
-            <h2 className="text-lg font-semibold mb-2">Advanced Settings</h2>
+            <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Advanced Settings</h2>
             <div>
                 <label className="block text-sm font-medium mb-1">Negative Prompt (What to avoid)</label>
                 <textarea value={negativePrompt} onChange={e => setNegativePrompt(e.target.value)} placeholder="e.g., blurry, shaky, watermark" rows={1} className="w-full bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg p-3 focus:ring-2 focus:ring-primary-500 focus:outline-none" />
@@ -504,7 +504,7 @@ const VideoGenerationView: React.FC<VideoGenerationViewProps> = ({ preset, clear
         </div>
 
         <div>
-            <h2 className="text-lg font-semibold mb-2">Dialogue & Text</h2>
+            <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Dialogue & Text</h2>
             <div className="space-y-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">On-Screen Text (Captions)</label>

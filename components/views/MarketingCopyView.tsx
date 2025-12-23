@@ -119,7 +119,7 @@ const MarketingCopyView: React.FC<MarketingCopyViewProps> = ({ language }) => {
     const leftPanel = (
         <>
             <div>
-                <h1 className="text-xl font-bold sm:text-3xl">AI Marketing Copywriter</h1>
+                <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">AI Marketing Copywriter</h1>
                 <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">Generate persuasive copy for ads, posts, and websites.</p>
             </div>
 

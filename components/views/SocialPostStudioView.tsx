@@ -103,7 +103,7 @@ const AiWriterModal: React.FC<AiWriterModalProps> = ({ isOpen, onClose, onConfir
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-zoomIn p-4" onClick={onClose} role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-2xl w-full max-w-2xl flex flex-col p-6" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">AI Social Post Writer</h2>
+                    <h2 className="text-xl font-bold text-neutral-900 dark:text-white">AI Social Post Writer</h2>
                     <button onClick={onClose} className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700"><XIcon className="w-6 h-6"/></button>
                 </div>
 
@@ -210,7 +210,7 @@ const SocialPostStudioView: React.FC<SocialPostStudioViewProps> = ({ language, c
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold sm:text-3xl flex items-center gap-3">
+            <h1 className="text-2xl font-bold sm:text-3xl flex items-center gap-3 text-neutral-900 dark:text-white">
                 <MegaphoneIcon className="w-8 h-8 text-primary-500" />
                 Social Post Studio
             </h1>

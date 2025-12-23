@@ -41,12 +41,12 @@ interface ImageEditPreset {
   mimeType: string;
 }
 
-// NOTE: ThemeSwitcher removed from UI as 2100 theme is dark-only, but logic kept for compatibility.
-const ThemeSwitcher: React.FC<{ theme: string; setTheme: (theme: string) => void }> = ({ theme, setTheme }) => (
+// Theme Switcher Component
+const ThemeSwitcher: React.FC<{ theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void }> = ({ theme, setTheme }) => (
     <button
         onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-        className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-white"
-        title="Toggle Theme (Optimized for Dark)"
+        className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors text-neutral-600 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white"
+        title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
     >
         {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
     </button>
@@ -59,7 +59,7 @@ const App: React.FC = () => {
   const [activeApiKey, setActiveApiKey] = useState<string | null>(null);
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(true);
   const [activeView, setActiveView] = useState<View>('home');
-  const [theme, setTheme] = useState('dark'); // Default to dark for 2100 theme
+  const [theme, setTheme] = useState<'light' | 'dark'>('light'); // Default to light mode
   const [language, setLanguage] = useState<Language>('en');
   const [videoGenPreset, setVideoGenPreset] = useState<VideoGenPreset | null>(null);
   const [imageToReEdit, setImageToReEdit] = useState<ImageEditPreset | null>(null);
@@ -80,8 +80,13 @@ const App: React.FC = () => {
   // ... (Keep existing useEffects for loading settings, user session, etc.)
   useEffect(() => {
     const loadSettings = async () => {
-        // Force dark mode for 2100 aesthetic initially
-        setTheme('dark');
+        // Load saved theme or default to light
+        const savedTheme = await loadData<'light' | 'dark'>('theme');
+        if (savedTheme) {
+            setTheme(savedTheme);
+        } else {
+            setTheme('light'); // Default to light mode
+        }
         const savedLang = await loadData<Language>('language');
         if (savedLang) setLanguage(savedLang);
     };
@@ -159,14 +164,25 @@ const App: React.FC = () => {
             }
         }
 
-        // 2. Proxy Server
-        const currentServer = sessionStorage.getItem('selectedProxyServer');
-        if (!currentServer) {
-            const servers = await getAvailableServersForUser(currentUser);
-            if (servers.length > 0) {
-                // Random load balance for default
-                const selected = servers[Math.floor(Math.random() * servers.length)];
-                sessionStorage.setItem('selectedProxyServer', selected);
+        // 2. Proxy Server - Skip auto-select on localhost
+        const hostname = window.location.hostname.toLowerCase();
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+        const isDevPort = window.location.port === '8080' || window.location.port === '3000';
+        
+        if (isLocalhost || isDevPort) {
+            // On localhost, always use localhost server - clear any stored proxy server
+            console.log(`[Init] Running on localhost (hostname: ${hostname}, port: ${window.location.port}) - clearing sessionStorage and using localhost:3001`);
+            sessionStorage.removeItem('selectedProxyServer'); // Clear any stored proxy server
+        } else {
+            // Only auto-select server when NOT on localhost
+            const currentServer = sessionStorage.getItem('selectedProxyServer');
+            if (!currentServer) {
+                const servers = await getAvailableServersForUser(currentUser);
+                if (servers.length > 0) {
+                    // Random load balance for default
+                    const selected = servers[Math.floor(Math.random() * servers.length)];
+                    sessionStorage.setItem('selectedProxyServer', selected);
+                }
             }
         }
 
@@ -270,7 +286,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (!sessionChecked || isApiKeyLoading) return <div className="flex items-center justify-center min-h-screen bg-[#050505]"><Spinner /></div>;
+  if (!sessionChecked || isApiKeyLoading) return <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-[#050505]"><Spinner /></div>;
   
   if (!currentUser) return <LoginPage onLoginSuccess={(u) => { 
       // CRITICAL FIX: Save to localStorage immediately upon login to ensure API client can read it.
@@ -297,37 +313,40 @@ const App: React.FC = () => {
 
         <main className="flex-1 flex flex-col min-w-0 md:pl-24 lg:pl-28 transition-all duration-300 relative z-10 h-full">
             {/* Header (Full Width "Full Petak") */}
-            <header className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#050505]/80 backdrop-blur-xl shrink-0">
+            <header className="sticky top-0 z-30 w-full border-b border-neutral-200 dark:border-white/10 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-xl shrink-0">
                 <div className="w-full px-4 py-3 md:px-6 flex items-center justify-between">
                     {/* Mobile Logo Left (Rail handles desktop logo) */}
-                    <div className="md:hidden font-black text-xl tracking-tighter flex items-center gap-2 text-white">
+                    <div className="md:hidden font-black text-xl tracking-tighter flex items-center gap-2 text-neutral-900 dark:text-white">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-start to-brand-end flex items-center justify-center text-white font-bold text-lg">M</div>
                         <span>MONOklix</span>
                     </div>
                     
                     {/* Desktop spacer */}
                     <div className="hidden md:block">
-                        <span className="text-xs font-mono text-neutral-500 uppercase tracking-widest">Mk-OS v2.1</span>
+                        <span className="text-xs font-mono text-neutral-500 dark:text-neutral-500 uppercase tracking-widest">Mk-OS v2.1</span>
                     </div>
                     
                     {/* Right Actions */}
                     <div className="flex items-center gap-3 ml-auto">
                         
                         {/* Operational Status */}
-                        <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-500/20">
+                        <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-3 py-1.5 rounded-full border border-green-300 dark:border-green-500/20">
                             <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 dark:bg-green-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                             </span>
                             OPERATIONAL
                         </div>
 
-                        <div className="h-4 w-px bg-white/10 hidden md:block"></div>
+                        <div className="h-4 w-px bg-neutral-300 dark:bg-white/10 hidden md:block"></div>
+
+                        {/* Theme Switcher */}
+                        <ThemeSwitcher theme={theme} setTheme={setTheme} />
 
                         {/* Reload Button */}
                         <button
                             onClick={() => window.location.reload()}
-                            className="p-2 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                            className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
                             title="Refresh App"
                         >
                             <RefreshCwIcon className="w-5 h-5" />
@@ -336,7 +355,7 @@ const App: React.FC = () => {
                         {/* Console Log - Moved position */}
                         <button
                             onClick={() => setIsLogSidebarOpen(!isLogSidebarOpen)}
-                            className="p-2 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                            className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
                         >
                             <TerminalIcon className="w-5 h-5" />
                         </button>
@@ -355,7 +374,7 @@ const App: React.FC = () => {
                         {/* Menu Icon - Mobile Only */}
                         <button
                             onClick={() => setIsMenuOpen(true)}
-                            className="md:hidden p-2 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                            className="md:hidden p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
                         >
                             <MenuIcon className="w-5 h-5" />
                         </button>
@@ -368,19 +387,19 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 custom-scrollbar">
                 {/* Announcement Banner (Holographic Marquee) */}
                 {activeView === 'home' && announcements.length > 0 && (
-                     <div className="mb-6 mx-auto max-w-[1600px] w-full bg-brand-start/10 border border-brand-start/20 text-white p-2 rounded-xl shadow-[0_0_15px_rgba(74,108,247,0.2)] flex items-center gap-3 animate-zoomIn relative overflow-hidden group">
+                     <div className="mb-6 mx-auto max-w-[1600px] w-full bg-brand-start/10 dark:bg-brand-start/10 border border-brand-start/30 dark:border-brand-start/20 text-brand-start dark:text-white p-2 rounded-xl shadow-[0_0_15px_rgba(74,108,247,0.1)] dark:shadow-[0_0_15px_rgba(74,108,247,0.2)] flex items-center gap-3 animate-zoomIn relative overflow-hidden group">
                         {/* Static Label */}
-                        <div className="flex-shrink-0 z-10 bg-[#0d1117] pr-4 pl-2 py-1 flex items-center gap-2 shadow-lg">
-                             <span className="bg-brand-start px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-lg">New</span>
+                        <div className="flex-shrink-0 z-10 bg-neutral-900 dark:bg-[#0d1117] pr-4 pl-2 py-1 flex items-center gap-2 shadow-lg">
+                             <span className="bg-brand-start px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-lg text-white">New</span>
                         </div>
                         {/* Marquee Content */}
                         <div className="flex-1 overflow-hidden relative h-6">
                              <div className="absolute whitespace-nowrap animate-marquee flex items-center h-full">
                                  {/* Duplicate content to create seamless loop effect */}
-                                 <span className="text-sm font-medium text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
-                                 <span className="text-sm font-medium text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
-                                 <span className="text-sm font-medium text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
-                                 <span className="text-sm font-medium text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
+                                 <span className="text-sm font-medium text-brand-start dark:text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
+                                 <span className="text-sm font-medium text-brand-start dark:text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
+                                 <span className="text-sm font-medium text-brand-start dark:text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
+                                 <span className="text-sm font-medium text-brand-start dark:text-neutral-200 mr-24">{announcements[0].title}: {announcements[0].content}</span>
                              </div>
                         </div>
                      </div>

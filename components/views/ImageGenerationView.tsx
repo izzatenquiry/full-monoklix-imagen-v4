@@ -309,7 +309,7 @@ const ImageGenerationView: React.FC<ImageGenerationViewProps> = ({ onCreateVideo
   const leftPanel = (
     <>
       <div>
-        <h1 className="text-xl font-bold sm:text-3xl">{isEditing ? 'AI Image Editor' : 'AI Image Generation'}</h1>
+        <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">{isEditing ? 'AI Image Editor' : 'AI Image Generation'}</h1>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">{isEditing ? 'Edit your images with simple text commands.' : 'Create stunning images from text descriptions.'}</p>
       </div>
       
@@ -358,7 +358,7 @@ const ImageGenerationView: React.FC<ImageGenerationViewProps> = ({ onCreateVideo
       />
       
       <div className="space-y-4 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold mb-2">Advanced Settings</h2>
+          <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">Advanced Settings</h2>
           <div>
             <label htmlFor="negative-prompt" className={`block text-sm font-medium mb-2 transition-colors text-gray-600 dark:text-gray-400`}>Negative Prompt (What to avoid)</label>
             <textarea id="negative-prompt" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="e.g., text, watermarks, blurry, ugly" rows={2} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-3 focus:ring-2 focus:ring-primary-500 focus:outline-none transition" />

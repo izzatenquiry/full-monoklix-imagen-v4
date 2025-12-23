@@ -135,7 +135,7 @@ const BackgroundRemoverView: React.FC<BackgroundRemoverViewProps> = ({ onReEdit,
   const leftPanel = (
     <>
       <div>
-        <h1 className="text-xl font-bold sm:text-3xl">AI Background Remover</h1>
+        <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">AI Background Remover</h1>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">Automatically remove the background from any image.</p>
       </div>
       

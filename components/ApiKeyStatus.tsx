@@ -494,13 +494,12 @@ const ApiKeyStatus: React.FC<ApiKeyStatusProps> = ({ activeApiKey, currentUser, 
                                 {isChecking ? <Spinner /> : <RefreshCwIcon className="w-4 h-4" />}
                                 {T.healthCheck}
                             </button>
-                             <a
+                            <a
                                 href="https://t.me/MKAITokenBot"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="w-full flex items-center justify-center gap-2 bg-sky-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors text-sm"
                             >
-                                <TelegramIcon className="w-4 h-4" />
                                 Request Token
                             </a>
                         </div>
@@ -508,7 +507,15 @@ const ApiKeyStatus: React.FC<ApiKeyStatusProps> = ({ activeApiKey, currentUser, 
 
                     {results && (
                         <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 max-h-60 overflow-y-auto custom-scrollbar space-y-2">
-                            {results.map((result, index) => {
+                            {results
+                                .filter(result => {
+                                    // Hide Veo Service errors, especially reCAPTCHA errors
+                                    if (result.service.includes('Veo') && result.status === 'error') {
+                                        return false;
+                                    }
+                                    return true;
+                                })
+                                .map((result, index) => {
                                 const { icon, text } = getStatusUi(result.status);
                                 const statusText = result.status === 'error' 
                                     ? T.unavailable 

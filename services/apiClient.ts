@@ -5,7 +5,15 @@ import { supabase } from './supabaseClient';
 import { PROXY_SERVER_URLS } from './serverConfig';
 
 export const getVeoProxyUrl = (): string => {
-  if (window.location.hostname === 'localhost') {
+  // CRITICAL: Always use localhost when running on localhost - ignore sessionStorage
+  const hostname = window.location.hostname.toLowerCase();
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  
+  // Additional check: if port is 8080 (Vite dev server), assume localhost
+  const isDevPort = window.location.port === '8080' || window.location.port === '3000';
+  
+  if (isLocalhost || isDevPort) {
+    console.log(`[API Client] Running on localhost (hostname: ${hostname}, port: ${window.location.port}) - forcing localhost:3001 for Veo`);
     return 'http://localhost:3001';
   }
   const userSelectedProxy = sessionStorage.getItem('selectedProxyServer');
@@ -17,7 +25,15 @@ export const getVeoProxyUrl = (): string => {
 };
 
 export const getImagenProxyUrl = (): string => {
-  if (window.location.hostname === 'localhost') {
+  // CRITICAL: Always use localhost when running on localhost - ignore sessionStorage
+  const hostname = window.location.hostname.toLowerCase();
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  
+  // Additional check: if port is 8080 (Vite dev server), assume localhost
+  const isDevPort = window.location.port === '8080' || window.location.port === '3000';
+  
+  if (isLocalhost || isDevPort) {
+    console.log(`[API Client] Running on localhost (hostname: ${hostname}, port: ${window.location.port}) - forcing localhost:3001 for Imagen`);
     return 'http://localhost:3001';
   }
   const userSelectedProxy = sessionStorage.getItem('selectedProxyServer');
@@ -117,7 +133,24 @@ export const executeProxiedRequest = async (
   }
   
   // Use override URL if provided, otherwise default to standard proxy selection
-  const currentServerUrl = overrideServerUrl || (serviceType === 'veo' ? getVeoProxyUrl() : getImagenProxyUrl());
+  const selectedUrl = serviceType === 'veo' ? getVeoProxyUrl() : getImagenProxyUrl();
+  let currentServerUrl = overrideServerUrl || selectedUrl;
+  
+  // CRITICAL: Force localhost if we're in localhost environment but URL is not localhost
+  const hostname = window.location.hostname.toLowerCase();
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  const isDevPort = window.location.port === '8080' || window.location.port === '3000';
+  const isLocalEnv = isLocalhost || isDevPort;
+  
+  if (isLocalEnv && !currentServerUrl.includes('localhost:3001')) {
+    console.warn(`[API Client] ⚠️ WARNING: Running on localhost (${hostname}:${window.location.port}) but selected URL is ${currentServerUrl}. Forcing localhost:3001.`);
+    currentServerUrl = 'http://localhost:3001';
+  }
+  
+  // Debug logging for localhost detection
+  if (!isStatusCheck) {
+    console.log(`[API Client] Hostname: ${window.location.hostname}, Port: ${window.location.port}, IsLocalEnv: ${isLocalEnv}, Selected URL: ${currentServerUrl}`);
+  }
   
   // 1. Acquire Server Slot (Rate Limiting at Server Level)
   const isGenerationRequest = logContext.includes('GENERATE') || logContext.includes('RECIPE');
@@ -170,6 +203,11 @@ export const executeProxiedRequest = async (
   try {
       const endpoint = `${currentServerUrl}/api/${serviceType}${relativePath}`;
       
+      if (!isStatusCheck) {
+          console.log(`[API Client] Making request to: ${endpoint}`);
+          console.log(`[API Client] Server URL: ${currentServerUrl}, Service: ${serviceType}, Path: ${relativePath}`);
+      }
+      
       const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -209,6 +247,29 @@ export const executeProxiedRequest = async (
 
   } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
+      
+      // Better error handling for network errors (like failed to fetch)
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch') || errMsg.includes('ERR_')) {
+          const hostname = window.location.hostname.toLowerCase();
+          const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+          const isDevPort = window.location.port === '8080' || window.location.port === '3000';
+          const isLocalEnv = isLocalhost || isDevPort;
+          
+          let networkError = `Network error: Cannot connect to ${currentServerUrl}`;
+          
+          if (isLocalEnv && currentServerUrl.includes('localhost:3001')) {
+              networkError += `. Make sure the server is running. Start it with: cd server && npm start`;
+          } else if (isLocalEnv && !currentServerUrl.includes('localhost:3001')) {
+              networkError += `. ERROR: Running on localhost but trying to connect to ${currentServerUrl}. Should be using localhost:3001.`;
+          } else {
+              networkError += `. Please check if the server is accessible.`;
+          }
+          
+          console.error(`[API Client] ❌ ${networkError}`);
+          console.error(`[API Client] Endpoint attempted: ${currentServerUrl}/api/${serviceType}${relativePath}`);
+          throw new Error(networkError);
+      }
+      
       const isSafetyError = errMsg.includes('[400]') || errMsg.toLowerCase().includes('safety') || errMsg.toLowerCase().includes('blocked');
 
       if (!specificToken && !isSafetyError && !isStatusCheck) {

@@ -65,6 +65,9 @@ app.use(cors({
   origin: [
     'http://localhost:8080',
     'https://dev.monoklix.com',
+    'https://app.monoklix.com',
+    'https://dev1.monoklix.com',
+    'https://app2.monoklix.com',
     'https://monoklix.com'
   ],
   credentials: true

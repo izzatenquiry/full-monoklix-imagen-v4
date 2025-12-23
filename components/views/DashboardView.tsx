@@ -34,16 +34,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ currentUser, navigateTo }
           {/* Ambient Glow */}
           <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full bg-${color}-500 opacity-20 blur-[50px] group-hover:opacity-40 transition-opacity duration-500`}></div>
           
-          <div className={`relative z-10 p-3 rounded-2xl bg-white/5 border border-white/10 text-${color}-400 group-hover:text-white group-hover:bg-${color}-500 group-hover:border-${color}-400 transition-all duration-300`}>
+          <div className={`relative z-10 p-3 rounded-2xl bg-neutral-100 dark:bg-white/5 border border-neutral-300 dark:border-white/10 text-${color}-600 dark:text-${color}-400 group-hover:text-white group-hover:bg-${color}-500 group-hover:border-${color}-400 transition-all duration-300`}>
               <Icon className="w-6 h-6" />
           </div>
           
           <div className="relative z-10 text-left w-full">
               <div className="flex justify-between items-center w-full">
-                  <h3 className="font-bold text-lg text-white group-hover:text-glow transition-all">{title}</h3>
-                  <ChevronRightIcon className="w-4 h-4 text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                  <h3 className="font-bold text-lg text-neutral-900 dark:text-white group-hover:text-glow transition-all">{title}</h3>
+                  <ChevronRightIcon className="w-4 h-4 text-neutral-600 dark:text-white/30 group-hover:text-neutral-900 dark:group-hover:text-white group-hover:translate-x-1 transition-all" />
               </div>
-              <p className="text-xs text-neutral-400 mt-1 font-medium">{desc}</p>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1 font-medium">{desc}</p>
           </div>
       </button>
   );
@@ -59,41 +59,41 @@ const DashboardView: React.FC<DashboardViewProps> = ({ currentUser, navigateTo }
                 <div className="h-px w-8 bg-brand-start"></div>
                 <span className="text-xs font-mono text-brand-start tracking-widest uppercase">System Online</span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight leading-none">
+            <h1 className="text-4xl md:text-6xl font-black text-neutral-900 dark:text-white tracking-tight leading-none">
                 HELLO, <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-start to-brand-end">{currentUser.fullName?.split(' ')[0] || currentUser.username}</span>
             </h1>
-            <p className="text-neutral-400 mt-2 text-lg font-light">Welcome to the future of content creation.</p>
+            <p className="text-neutral-600 dark:text-neutral-400 mt-2 text-lg font-light">Welcome to the future of content creation.</p>
         </div>
 
         {/* Stats Module (Moved to Header) */}
         <div className="lg:col-span-4">
-             <div className="holo-card p-6 relative bg-gradient-to-br from-[#1a1a2e] to-[#16213e] overflow-hidden">
+             <div className="holo-card p-6 relative bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-[#1a1a2e] dark:to-[#16213e] overflow-hidden">
                  <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                     <TrendingUpIcon className="w-24 h-24 text-white" />
+                     <TrendingUpIcon className="w-24 h-24 text-neutral-900 dark:text-white" />
                  </div>
-                 <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-4">Global Neural Activity</h3>
+                 <h3 className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-widest mb-4">Global Neural Activity</h3>
                  
                  <div className="grid grid-cols-2 gap-4 relative z-10">
                      <div>
                          <div className="flex items-baseline gap-1 mb-1">
-                             <p className="text-2xl font-black text-white">{platformStats?.totalImages.toLocaleString() || '0'}</p>
+                             <p className="text-2xl font-black text-neutral-900 dark:text-white">{platformStats?.totalImages.toLocaleString() || '0'}</p>
                          </div>
-                         <span className="text-[10px] font-bold text-green-400 flex items-center gap-1 uppercase tracking-wide">
+                         <span className="text-[10px] font-bold text-green-600 dark:text-green-400 flex items-center gap-1 uppercase tracking-wide">
                              <ImageIcon className="w-3 h-3" /> Images
                          </span>
-                         <div className="w-full bg-white/10 rounded-full h-1 mt-2">
+                         <div className="w-full bg-neutral-300 dark:bg-white/10 rounded-full h-1 mt-2">
                              <div className="bg-brand-start h-1 rounded-full w-3/4 shadow-[0_0_10px_#4A6CF7]"></div>
                          </div>
                      </div>
                      
                      <div>
                          <div className="flex items-baseline gap-1 mb-1">
-                             <p className="text-2xl font-black text-white">{platformStats?.totalVideos.toLocaleString() || '0'}</p>
+                             <p className="text-2xl font-black text-neutral-900 dark:text-white">{platformStats?.totalVideos.toLocaleString() || '0'}</p>
                          </div>
-                         <span className="text-[10px] font-bold text-purple-400 flex items-center gap-1 uppercase tracking-wide">
+                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 uppercase tracking-wide">
                              <VideoIcon className="w-3 h-3" /> Videos
                          </span>
-                         <div className="w-full bg-white/10 rounded-full h-1 mt-2">
+                         <div className="w-full bg-neutral-300 dark:bg-white/10 rounded-full h-1 mt-2">
                              <div className="bg-brand-end h-1 rounded-full w-1/2 shadow-[0_0_10px_#A05BFF]"></div>
                          </div>
                      </div>
@@ -108,7 +108,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ currentUser, navigateTo }
         {/* Left Panel: Welcome Video */}
         {content?.mainVideoUrl && (
             <div className="w-full animate-zoomIn h-full" style={{ animationDelay: '50ms' }}>
-                <div className="nav-capsule p-1 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative group h-full">
+                <div className="bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-2xl p-1 rounded-3xl overflow-hidden shadow-2xl border border-neutral-200 dark:border-white/10 relative group h-full">
                     <div className="relative aspect-video w-full bg-black rounded-[1.2rem] overflow-hidden">
                         <iframe 
                             src={content.mainVideoUrl} 
@@ -133,11 +133,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ currentUser, navigateTo }
                 delay={100}
             />
             <QuickActionCard 
-                title="Video Gen" 
-                desc="Veo Cinematic" 
-                icon={VideoIcon} 
+                title="Image Storyboard" 
+                desc="AI Storyboard Generator" 
+                icon={ImageIcon} 
                 color="blue" 
-                onClick={() => navigateTo('ai-video-suite')}
+                onClick={() => {
+                    sessionStorage.setItem('aiImageSuiteActiveTab', 'storyboard');
+                    navigateTo('ai-image-suite');
+                }}
                 delay={200}
             />
             <QuickActionCard 

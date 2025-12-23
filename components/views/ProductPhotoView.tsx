@@ -52,7 +52,7 @@ type ImageSlot = string | { error: string } | null;
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <h2 className="text-lg font-semibold mb-2">{title}</h2>
+        <h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">{title}</h2>
         {children}
     </div>
 );
@@ -209,7 +209,7 @@ const ProductPhotoView: React.FC<ProductPhotoViewProps> = ({ onReEdit, onCreateV
   const leftPanel = (
     <>
       <div>
-        <h1 className="text-xl font-bold sm:text-3xl">{T.title}</h1>
+        <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">{T.title}</h1>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">{T.subtitle}</p>
       </div>
 

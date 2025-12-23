@@ -145,7 +145,7 @@ const ImageEnhancerView: React.FC<ImageEnhancerViewProps> = ({ onReEdit, onCreat
   const leftPanel = (
     <>
       <div>
-        <h1 className="text-xl font-bold sm:text-3xl">AI Image Enhancer</h1>
+        <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">AI Image Enhancer</h1>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">Improve the quality and colors of your images.</p>
       </div>
       

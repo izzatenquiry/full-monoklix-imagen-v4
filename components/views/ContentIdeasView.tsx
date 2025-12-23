@@ -105,7 +105,7 @@ const ContentIdeasView: React.FC<ContentIdeasViewProps> = ({ language }) => {
     const leftPanel = (
         <>
             <div>
-                <h1 className="text-xl font-bold sm:text-3xl">AI Content Idea Generator</h1>
+                <h1 className="text-xl font-bold sm:text-3xl text-neutral-900 dark:text-white">AI Content Idea Generator</h1>
                 <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 mt-1">Discover trending and engaging content ideas for any topic.</p>
             </div>
             

@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "npx concurrently \"npm run dev:server\" \"npm run dev\"",
+    "dev:server": "npm --prefix server start",
     "build": "vite build",
     "preview": "serve -s dist -l 3000",
     "start": "serve -s dist -l $PORT"
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/node": "22.14.0",
     "@vitejs/plugin-react": "5.0.3",
+    "concurrently": "^8.2.2",
     "typescript": "5.8.2",
     "vite": "6.2.0"
   }

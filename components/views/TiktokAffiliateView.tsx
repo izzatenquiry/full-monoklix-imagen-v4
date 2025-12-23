@@ -411,7 +411,7 @@ const TiktokAffiliateView: React.FC<TiktokAffiliateViewProps> = ({ onReEdit, onC
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div><h2 className="text-lg font-semibold mb-2">{title}</h2>{children}</div>
+    <div><h2 className="text-lg font-semibold mb-2 text-neutral-900 dark:text-white">{title}</h2>{children}</div>
 );
 
 export default TiktokAffiliateView;

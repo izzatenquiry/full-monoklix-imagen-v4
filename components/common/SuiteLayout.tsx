@@ -20,10 +20,10 @@ const SuiteLayout: React.FC<SuiteLayoutProps> = ({ title, subtitle, icon: Icon, 
                         </div>
                     )}
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight text-glow">
+                        <h1 className="text-3xl md:text-4xl font-black text-neutral-900 dark:text-white tracking-tight dark:text-glow">
                             {title}
                         </h1>
-                        {subtitle && <p className="text-sm text-neutral-400 mt-1 font-light tracking-wide">{subtitle}</p>}
+                        {subtitle && <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1 font-light tracking-wide">{subtitle}</p>}
                     </div>
                 </div>
             </div>

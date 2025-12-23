@@ -16,7 +16,6 @@ const getNavItems = (language: Language): NavItem[] => {
         { id: 'get-started', label: T.getStarted, section: 'main', icon: GraduationCapIcon },
         { id: 'ai-text-suite', label: T.aiContentIdea, section: 'free', icon: FileTextIcon },
         { id: 'ai-image-suite', label: T.aiImage, section: 'free', icon: ImageIcon },
-        { id: 'ai-video-suite', label: T.aiVideo, section: 'free', icon: VideoIcon },
         { id: 'ai-prompt-library-suite', label: T.promptLibrary, section: 'free', icon: LibraryIcon },
         { id: 'gallery', label: T.imageGallery, section: 'free', icon: GalleryIcon },  
         { id: 'support-group', label: T.supportGroup, section: 'bottom', icon: TelegramIcon, isExternal: true, url: 'https://t.me/+r_PkHl9yRck5NzJl' },
