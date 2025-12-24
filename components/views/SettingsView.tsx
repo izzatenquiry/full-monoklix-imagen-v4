@@ -4,7 +4,7 @@ import { type User, type AiLogItem, type Language } from '../../types';
 import { updateUserProfile, saveUserPersonalAuthToken, assignPersonalTokenAndIncrementUsage } from '../../services/userService';
 import {
     CreditCardIcon, CheckCircleIcon, XIcon, EyeIcon, EyeOffIcon, ChatIcon,
-    AlertTriangleIcon, DatabaseIcon, TrashIcon, RefreshCwIcon, WhatsAppIcon, InformationCircleIcon, SparklesIcon, VideoIcon, ImageIcon, KeyIcon, ActivityIcon
+    AlertTriangleIcon, DatabaseIcon, TrashIcon, RefreshCwIcon, WhatsAppIcon, InformationCircleIcon, SparklesIcon, VideoIcon, ImageIcon, KeyIcon, ActivityIcon, ServerIcon
 } from '../Icons';
 import Spinner from '../common/Spinner';
 import Tabs, { type Tab } from '../common/Tabs';
@@ -13,15 +13,16 @@ import { getFormattedCacheStats, clearVideoCache } from '../../services/videoCac
 import { runComprehensiveTokenTest, type TokenTestResult } from '../../services/imagenV3Service';
 import eventBus from '../../services/eventBus';
 import { GalleryView } from './GalleryView';
+import FlowLogin from '../FlowLogin';
 
 // Define the types for the settings view tabs
-type SettingsTabId = 'profile' | 'gallery';
+type SettingsTabId = 'profile' | 'flow-api';
 
 const getTabs = (): Tab<SettingsTabId>[] => {
     const T = getTranslations().settingsView;
     return [
         { id: 'profile', label: T.tabs.profile },
-        { id: 'gallery', label: 'Gallery' },
+        { id: 'flow-api', label: 'Login Labs.Google' },
     ];
 }
 
@@ -38,6 +39,7 @@ interface SettingsViewProps {
   setLanguage: (lang: Language) => void;
   veoTokenRefreshedAt: string | null;
   assignTokenProcess: () => Promise<{ success: boolean; error: string | null; }>;
+  onOpenChangeServerModal?: () => void;
 }
 
 const ClaimTokenModal: React.FC<{
@@ -91,12 +93,235 @@ const ClaimTokenModal: React.FC<{
 
 // --- PANELS ---
 
-interface ProfilePanelProps extends Pick<SettingsViewProps, 'currentUser' | 'onUserUpdate' | 'assignTokenProcess'> {
+interface ProfilePanelProps extends Pick<SettingsViewProps, 'currentUser' | 'onUserUpdate' | 'assignTokenProcess' | 'onOpenChangeServerModal'> {
     language: Language;
     setLanguage: (lang: Language) => void;
 }
 
-const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, language, setLanguage, assignTokenProcess }) => {
+interface FlowApiPanelProps extends Pick<SettingsViewProps, 'currentUser' | 'onUserUpdate' | 'language'> {
+    assignTokenProcess: () => Promise<{ success: boolean; error: string | null; }>;
+}
+
+const FlowApiPanel: React.FC<FlowApiPanelProps> = ({ currentUser, onUserUpdate, language, assignTokenProcess }) => {
+    const T = getTranslations().settingsView;
+    const T_Api = T.api;
+
+    const [personalAuthToken, setPersonalAuthToken] = useState('');
+    const [showPersonalToken, setShowPersonalToken] = useState(false);
+    const [personalTokenSaveStatus, setPersonalTokenSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [testStatus, setTestStatus] = useState<'idle' | 'testing'>('idle');
+    const [testResults, setTestResults] = useState<TokenTestResult[] | null>(null);
+    const activeApiKey = sessionStorage.getItem('monoklix_session_api_key');
+
+    const handleSavePersonalToken = async () => {
+        setPersonalTokenSaveStatus('saving');
+        const result = await saveUserPersonalAuthToken(currentUser.id, personalAuthToken.trim() || null);
+
+        if (result.success === false) {
+            setPersonalTokenSaveStatus('error');
+            if (result.message === 'DB_SCHEMA_MISSING_COLUMN_personal_auth_token' && currentUser.role === 'admin') {
+                alert("Database schema is outdated.\n\nPlease go to your Supabase dashboard and run the following SQL command to add the required column:\n\nALTER TABLE public.users ADD COLUMN personal_auth_token TEXT;");
+            }
+        } else {
+            onUserUpdate(result.user);
+            setPersonalTokenSaveStatus('saved');
+        }
+        setTimeout(() => setPersonalTokenSaveStatus('idle'), 3000);
+    };
+
+    const handleTestToken = useCallback(async () => {
+        setTestStatus('testing');
+        setTestResults(null);
+        const results = await runComprehensiveTokenTest(personalAuthToken);
+        setTestResults(results);
+        setTestStatus('idle');
+    }, [personalAuthToken]);
+
+    const handleClearToken = async () => {
+        if (!confirm('Are you sure you want to clear the personal token? This will remove your saved token.')) {
+            return;
+        }
+        setPersonalTokenSaveStatus('saving');
+        setPersonalAuthToken('');
+        setTestResults(null);
+        const result = await saveUserPersonalAuthToken(currentUser.id, null);
+
+        if (result.success === false) {
+            setPersonalTokenSaveStatus('error');
+        } else {
+            onUserUpdate(result.user);
+            setPersonalTokenSaveStatus('saved');
+        }
+        setTimeout(() => setPersonalTokenSaveStatus('idle'), 3000);
+    };
+
+    return (
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm h-full overflow-y-auto">
+            <div className="p-4 md:p-8 space-y-8">
+                {/* Google Labs Flow Login & API Configuration Section */}
+                <div className="bg-neutral-50 dark:bg-neutral-800/30 rounded-xl p-4 md:p-6 border border-neutral-200 dark:border-neutral-700">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                            <KeyIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Google Labs Flow & API Keys</h3>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Step 1: Flow Login */}
+                        <div className="border-b border-neutral-200 dark:border-neutral-700 pb-6">
+                            <FlowLogin 
+                                language={language} 
+                                currentUser={currentUser} 
+                                onUserUpdate={onUserUpdate}
+                                onTokenExtracted={(token) => {
+                                    setPersonalAuthToken(token);
+                                }}
+                            />
+                        </div>
+
+                        {/* Step 2: Personal Token Input */}
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                {T_Api.authTokenTitle}
+                            </label>
+                                <div className="relative">
+                                    <input
+                                        type={showPersonalToken ? 'text' : 'password'}
+                                        value={personalAuthToken}
+                                        onChange={(e) => {
+                                            setPersonalAuthToken(e.target.value);
+                                            setTestResults(null);
+                                        }}
+                                        placeholder={T_Api.authTokenPlaceholder}
+                                        className="w-full bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg px-4 py-3 pr-12 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all font-mono text-sm"
+                                    />
+                                    <button 
+                                        onClick={() => setShowPersonalToken(!showPersonalToken)} 
+                                        className="absolute inset-y-0 right-0 px-4 flex items-center text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors"
+                                    >
+                                        {showPersonalToken ? <EyeOffIcon className="w-5 h-5"/> : <EyeIcon className="w-5 h-5"/>}
+                                    </button>
+                                </div>
+                                
+                                {testStatus === 'testing' && (
+                                    <div className="flex items-center gap-2 text-sm text-neutral-500 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-3">
+                                        <Spinner /> 
+                                        <span>{T_Api.testing}</span>
+                                    </div>
+                                )}
+                                
+                                {testResults && (
+                                    <div className="space-y-2">
+                                        {testResults.map(result => (
+                                            <div 
+                                                key={result.service} 
+                                                className={`flex items-start gap-3 text-sm p-3 rounded-lg border ${
+                                                    result.success 
+                                                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
+                                                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                                }`}
+                                            >
+                                                {result.success ? (
+                                                    <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5"/>
+                                                ) : (
+                                                    <XIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"/>
+                                                )}
+                                                <div className="flex-1">
+                                                    <span className={`font-semibold block mb-1 ${
+                                                        result.success 
+                                                            ? 'text-green-800 dark:text-green-200' 
+                                                            : 'text-red-700 dark:text-red-300'
+                                                    }`}>
+                                                        {result.service} Service
+                                                    </span>
+                                                    <p className={`text-xs ${
+                                                        result.success 
+                                                            ? 'text-green-700 dark:text-green-300' 
+                                                            : 'text-red-600 dark:text-red-400'
+                                                    }`}>
+                                                        {result.message}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-3 flex-wrap pt-2">
+                                    <button 
+                                        onClick={handleSavePersonalToken} 
+                                        disabled={personalTokenSaveStatus === 'saving'} 
+                                        className="px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md flex items-center gap-2"
+                                    >
+                                        {personalTokenSaveStatus === 'saving' ? <Spinner /> : T_Api.save}
+                                    </button>
+                                    <button 
+                                        onClick={handleTestToken} 
+                                        disabled={!personalAuthToken || testStatus === 'testing'} 
+                                        className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm hover:shadow-md"
+                                    >
+                                        {testStatus === 'testing' ? <Spinner /> : <SparklesIcon className="w-4 h-4" />}
+                                        {T_Api.runTest}
+                                    </button>
+                                    <button 
+                                        onClick={handleClearToken} 
+                                        disabled={!personalAuthToken || personalTokenSaveStatus === 'saving'} 
+                                        className="px-5 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm hover:shadow-md"
+                                    >
+                                        {personalTokenSaveStatus === 'saving' ? <Spinner /> : <XIcon className="w-4 h-4" />}
+                                        Clear
+                                    </button>
+                                    
+                                    {personalTokenSaveStatus === 'saved' && (
+                                        <span className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                            <CheckCircleIcon className="w-4 h-4"/> 
+                                            {T_Api.updated}
+                                        </span>
+                                    )}
+                                    {personalTokenSaveStatus === 'error' && (
+                                        <span className="text-sm text-red-600 dark:text-red-400 font-medium flex items-center gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                                            <XIcon className="w-4 h-4"/> 
+                                            {T_Api.saveFail}
+                                        </span>
+                                    )}
+                                </div>
+                        </div>
+
+                        {/* Step 3: Shared API Key Info */}
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <div className="flex items-start gap-3">
+                                <InformationCircleIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{T_Api.title}</p>
+                                    <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                                        {T_Api.description}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                        <span className="text-neutral-600 dark:text-neutral-400">{T_Api.sharedStatus}</span>
+                                        {activeApiKey ? (
+                                            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                                                <CheckCircleIcon className="w-4 h-4" />
+                                                {T_Api.connected}
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1.5 text-red-500">
+                                                <XIcon className="w-4 h-4" />
+                                                {T_Api.notLoaded}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, language, setLanguage, assignTokenProcess, onOpenChangeServerModal }) => {
     const T = getTranslations().settingsView;
     const T_Profile = T.profile;
     const T_Api = T.api;
@@ -215,7 +440,7 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, 
     }
 
     return (
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg shadow-sm h-full overflow-y-auto">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm h-full overflow-y-auto">
             {claimStatus !== 'idle' && (
                 <ClaimTokenModal
                     status={claimStatus}
@@ -225,120 +450,62 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ currentUser, onUserUpdate, 
                 />
             )}
 
-            <h2 className="text-xl font-semibold mb-6">{T_Profile.title}</h2>
-            
-            {/* Account Status Box */}
-            <div className="mb-6 p-4 bg-neutral-100 dark:bg-neutral-800/50 rounded-lg">
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">{T_Profile.accountStatus} <span className={`font-bold ${accountStatus.colorClass}`}>{accountStatus.text}</span></p>
-                {expiryInfo && <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-1">{expiryInfo}</p>}
-            </div>
+            <div className="p-4 md:p-8 space-y-8">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                    <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{T_Profile.title}</h2>
+                </div>
 
-            {/* User Profile Form - Moved Here */}
-            <div className="space-y-6 mb-8 border-b border-neutral-200 dark:border-neutral-800 pb-8">
-                <div>
-                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1">{T_Profile.fullName}</label>
-                    <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={status.type === 'loading'} className="w-full bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg p-2 focus:ring-2 focus:ring-primary-500 focus:outline-none transition disabled:opacity-50" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1">{T_Profile.email}</label>
-                    <input type="email" value={email} readOnly disabled className="w-full bg-neutral-200 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg p-2 cursor-not-allowed" />
-                </div>
-                <div className="flex items-center gap-4">
-                    <button onClick={handleSave} disabled={status.type === 'loading'} className="bg-primary-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-primary-700 transition-colors w-48 flex justify-center disabled:opacity-50">
-                        {status.type === 'loading' ? <Spinner /> : T_Profile.save}
-                    </button>
-                    {status.type !== 'idle' && (
-                        <div className={`flex items-center gap-3 text-sm ${status.type === 'success' ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
-                            {status.type === 'success' && <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />}
-                            {status.type === 'error' && <XIcon className="w-5 h-5 flex-shrink-0" />}
-                            <span>{status.message}</span>
+                {/* Account Status Card */}
+                <div className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 rounded-xl p-5 border border-primary-200 dark:border-primary-800">
+                    <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                            <p className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wider mb-2">{T_Profile.accountStatus}</p>
+                            <p className={`text-lg font-bold ${accountStatus.colorClass} mb-2`}>{accountStatus.text}</p>
+                            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+                                <span className="font-medium">Email:</span> {currentUser.email}
+                            </p>
+                            {expiryInfo && <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2">{expiryInfo}</p>}
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* --- API CONFIGURATION SECTION --- */}
-            <div className="mb-8">
-                 <h3 className="text-lg font-bold mb-4 text-neutral-800 dark:text-neutral-200">{T_Api.title}</h3>
-                 
-                 {/* Shared Key Info */}
-                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 mb-4">
-                    <div className="flex items-start gap-3">
-                        <InformationCircleIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-blue-800 dark:text-blue-200">
-                            {T_Api.description}
-                        </p>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2 text-sm font-medium">
-                        <span className="text-neutral-600 dark:text-neutral-400">{T_Api.sharedStatus}</span>
-                        {activeApiKey ? (
-                            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                                <CheckCircleIcon className="w-4 h-4" />
-                                {T_Api.connected}
-                            </span>
-                        ) : (
-                            <span className="flex items-center gap-1.5 text-red-500">
-                                <XIcon className="w-4 h-4" />
-                                {T_Api.notLoaded}
-                            </span>
-                        )}
-                    </div>
-                 </div>
-
-                 {/* Personal Token Input */}
-                 <div className="space-y-3">
-                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                        {T_Api.authTokenTitle}
-                    </label>
-                    <div className="relative">
-                        <input
-                            type={showPersonalToken ? 'text' : 'password'}
-                            value={personalAuthToken}
-                            onChange={(e) => {
-                                setPersonalAuthToken(e.target.value);
-                                setTestResults(null);
-                            }}
-                            placeholder={T_Api.authTokenPlaceholder}
-                            className="w-full bg-neutral-50 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
-                        />
-                        <button 
-                            onClick={() => setShowPersonalToken(!showPersonalToken)} 
-                            className="absolute inset-y-0 right-0 px-3 flex items-center text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-                        >
-                            {showPersonalToken ? <EyeOffIcon className="w-4 h-4"/> : <EyeIcon className="w-4 h-4"/>}
-                        </button>
-                    </div>
-                    
-                    {testStatus === 'testing' && <div className="flex items-center gap-2 text-sm text-neutral-500"><Spinner /> {T_Api.testing}</div>}
-                    {testResults && (
-                        <div className="space-y-2 mt-2">
-                            {testResults.map(result => (
-                                <div key={result.service} className={`flex items-start gap-2 text-sm p-2 rounded-md ${result.success ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                                    {result.success ? <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"/> : <XIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"/>}
-                                    <div>
-                                        <span className={`font-semibold ${result.success ? 'text-green-800 dark:text-green-200' : 'text-red-700 dark:text-red-300'}`}>{result.service} Service</span>
-                                        <p className={`text-xs ${result.success ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400'}`}>{result.message}</p>
-                                    </div>
-                                </div>
-                            ))}
+                        <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                            <CheckCircleIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                         </div>
-                    )}
+                    </div>
+                </div>
 
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <button onClick={handleSavePersonalToken} disabled={personalTokenSaveStatus === 'saving'} className="px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50">
-                            {personalTokenSaveStatus === 'saving' ? <Spinner /> : T_Api.save}
-                        </button>
-                        <button onClick={handleTestToken} disabled={!personalAuthToken || testStatus === 'testing'} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2">
-                            {testStatus === 'testing' ? <Spinner /> : <SparklesIcon className="w-4 h-4" />}
-                            {T_Api.runTest}
-                        </button>
+                {/* Server Selection Section */}
+                {onOpenChangeServerModal && (
+                    <div className="bg-neutral-50 dark:bg-neutral-800/30 rounded-xl p-4 md:p-6 border border-neutral-200 dark:border-neutral-700">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                <ServerIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Generation Server</h3>
+                        </div>
                         
-                        {personalTokenSaveStatus === 'saved' && <span className="text-sm text-green-600 font-medium flex items-center gap-1"><CheckCircleIcon className="w-4 h-4"/> {T_Api.updated}</span>}
-                        {personalTokenSaveStatus === 'error' && <span className="text-sm text-red-600 font-medium flex items-center gap-1"><XIcon className="w-4 h-4"/> {T_Api.saveFail}</span>}
+                        <div className="space-y-4">
+                            <div className="p-4 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+                                <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">Current Server</p>
+                                <p className="text-sm font-mono text-neutral-700 dark:text-neutral-300">
+                                    {typeof window !== 'undefined' && sessionStorage ? (sessionStorage.getItem('selectedProxyServer') || 'Auto-selected') : 'Auto-selected'}
+                                </p>
+                            </div>
+                            
+                            <button 
+                                onClick={onOpenChangeServerModal}
+                                className="w-full px-4 py-3 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                            >
+                                <ServerIcon className="w-4 h-4" />
+                                Change Server
+                            </button>
+                            
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                                Select a different proxy server for image and video generation. The system will automatically retry with different servers if one fails.
+                            </p>
+                        </div>
                     </div>
-                 </div>
+                )}
             </div>
-            {/* --- END API SECTION --- */}
 
             {/* Usage Statistics / Credits - Hidden */}
             {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 border-t border-neutral-200 dark:border-neutral-800 pt-6">
@@ -409,7 +576,7 @@ const CacheManagerPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg shadow-sm h-full">
+    <div className="bg-white dark:bg-neutral-900 p-4 md:p-6 rounded-lg shadow-sm h-full">
         <div className="flex items-center gap-3 mb-6">
           <DatabaseIcon className="w-8 h-8 text-primary-500" />
           <div>
@@ -475,7 +642,7 @@ const CacheManagerPanel: React.FC = () => {
   );
 };
 
-const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, tempApiKey, onUserUpdate, language, setLanguage, veoTokenRefreshedAt, assignTokenProcess }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, tempApiKey, onUserUpdate, language, setLanguage, veoTokenRefreshedAt, assignTokenProcess, onOpenChangeServerModal }) => {
     const [activeTab, setActiveTab] = useState<SettingsTabId>('profile');
     const tabs = getTabs();
     const T = getTranslations().settingsView;
@@ -491,18 +658,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, tempApiKey, on
                             language={language} 
                             setLanguage={setLanguage}
                             assignTokenProcess={assignTokenProcess}
+                            onOpenChangeServerModal={onOpenChangeServerModal}
                         />
                         <div className="h-full">
                             <CacheManagerPanel />
                         </div>
                     </div>
                 );
-            case 'gallery':
+            case 'flow-api':
                 return (
-                    <GalleryView 
-                        onCreateVideo={() => {}} 
-                        onReEdit={() => {}} 
-                        language={language} 
+                    <FlowApiPanel 
+                        currentUser={currentUser} 
+                        onUserUpdate={onUserUpdate} 
+                        language={language}
+                        assignTokenProcess={assignTokenProcess}
                     />
                 );
             default:
@@ -512,10 +681,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, tempApiKey, on
 
     return (
         <div className="h-full flex flex-col">
-            <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold sm:text-3xl">{T.title}</h1>
-            </div>
-            
             <div className="flex-shrink-0 my-6 flex justify-center">
                 <Tabs 
                     tabs={tabs}

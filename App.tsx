@@ -12,6 +12,7 @@ import { GalleryView } from './components/views/GalleryView';
 import WelcomeAnimation from './components/WelcomeAnimation';
 import { RefreshCwIcon, TerminalIcon, SunIcon, MoonIcon, AlertTriangleIcon, CheckCircleIcon, XIcon, SparklesIcon, MenuIcon } from './components/Icons';
 import { signOutUser, logActivity, getVeoAuthTokens, getSharedMasterApiKey, updateUserLastSeen, assignPersonalTokenAndIncrementUsage, saveUserPersonalAuthToken, updateUserProxyServer, getAvailableServersForUser, getDeviceOS, getServerUsageCounts, getUserProfile, assignRandomTokenToUser } from './services/userService';
+import { fetchTokenPool } from './services/tokenPoolService';
 import { getServersForDevice } from './services/serverConfig';
 import Spinner from './components/common/Spinner';
 import { loadData, saveData } from './services/indexedDBService';
@@ -128,7 +129,18 @@ const App: React.FC = () => {
   // Check Session
   useEffect(() => {
         const savedUserJson = localStorage.getItem('currentUser');
-        if (savedUserJson) setCurrentUser(JSON.parse(savedUserJson));
+        if (savedUserJson) {
+          const user = JSON.parse(savedUserJson);
+          setCurrentUser(user);
+          
+          // Fetch token pool if user exists (for existing sessions)
+          console.log('[App] Fetching token pool for existing session...');
+          fetchTokenPool(10).then(tokens => {
+            console.log(`[App] ✅ Token pool fetched and saved in session: ${tokens.length} tokens available for imagen generation`);
+          }).catch(error => {
+            console.error('[App] Error fetching token pool:', error);
+          });
+        }
         setSessionChecked(true);
         setIsApiKeyLoading(false);
   }, []);
@@ -243,14 +255,14 @@ const App: React.FC = () => {
       
       case 'ai-text-suite':
         return (
-            <SuiteLayout title="AI Content Suite">
+            <SuiteLayout>
                 <AiTextSuiteView currentUser={currentUser} language={language} />
             </SuiteLayout>
         );
 
       case 'ai-image-suite':
         return (
-            <SuiteLayout title="AI Image Suite">
+            <SuiteLayout>
                 <AiImageSuiteView 
                   onCreateVideo={(p) => { setVideoGenPreset(p); setActiveView('ai-video-suite'); }} 
                   onReEdit={(p) => { setImageToReEdit(p); setActiveView('ai-image-suite'); }}
@@ -267,7 +279,7 @@ const App: React.FC = () => {
 
       case 'ai-video-suite':
         return (
-            <SuiteLayout title="AI Video & Voice">
+            <SuiteLayout>
                 <AiVideoSuiteView 
                   currentUser={currentUser}
                   preset={videoGenPreset} 
@@ -282,7 +294,7 @@ const App: React.FC = () => {
 
       case 'ai-prompt-library-suite':
         return (
-            <SuiteLayout title="Prompt Library">
+            <SuiteLayout>
                 <AiPromptLibrarySuiteView 
                     onUsePrompt={(p) => { 
                         setImageGenPresetPrompt(p); 
@@ -295,7 +307,7 @@ const App: React.FC = () => {
         
       case 'gallery':
          return (
-            <SuiteLayout title="Your Gallery">
+            <SuiteLayout>
                 <GalleryView 
                     onCreateVideo={(p) => { setVideoGenPreset(p); setActiveView('ai-video-suite'); }} 
                     onReEdit={(p) => { setImageToReEdit(p); setActiveView('ai-image-suite'); }} 
@@ -305,13 +317,13 @@ const App: React.FC = () => {
          );
 
       case 'get-started':
-         return <SuiteLayout title="Get Started"><GetStartedView language={language} /></SuiteLayout>;
+         return <SuiteLayout><GetStartedView language={language} /></SuiteLayout>;
       
       case 'settings':
-         return <SuiteLayout title="Settings"><SettingsView currentUser={currentUser} tempApiKey={null} onUserUpdate={handleUserUpdate} language={language} setLanguage={setLanguage} veoTokenRefreshedAt={veoTokenRefreshedAt} assignTokenProcess={assignTokenProcess} /></SuiteLayout>;
+         return <SuiteLayout><SettingsView currentUser={currentUser} tempApiKey={null} onUserUpdate={handleUserUpdate} language={language} setLanguage={setLanguage} veoTokenRefreshedAt={veoTokenRefreshedAt} assignTokenProcess={assignTokenProcess} onOpenChangeServerModal={() => setShowServerModal(true)} /></SuiteLayout>;
 
       case 'admin-suite':
-          return <SuiteLayout title="Admin Command Center"><AdminSuiteView currentUser={currentUser} language={language} /></SuiteLayout>;
+          return <SuiteLayout><AdminSuiteView currentUser={currentUser} language={language} /></SuiteLayout>;
 
       default:
         return <DashboardView currentUser={currentUser} language={language} navigateTo={setActiveView} />;
@@ -320,11 +332,19 @@ const App: React.FC = () => {
 
   if (!sessionChecked || isApiKeyLoading) return <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-[#050505]"><Spinner /></div>;
   
-  if (!currentUser) return <LoginPage onLoginSuccess={(u) => { 
+  if (!currentUser) return <LoginPage onLoginSuccess={async (u) => { 
       // CRITICAL FIX: Save to localStorage immediately upon login to ensure API client can read it.
       localStorage.setItem('currentUser', JSON.stringify(u));
       setCurrentUser(u); 
-      setJustLoggedIn(true); 
+      setJustLoggedIn(true);
+      
+      // Fetch token pool from database and save in session (for imagen generation)
+      console.log('[App] Fetching token pool after login...');
+      const tokens = await fetchTokenPool(10).catch(error => {
+        console.error('[App] Error fetching token pool:', error);
+        return [];
+      });
+      console.log(`[App] ✅ Token pool fetched and saved in session: ${tokens.length} tokens available for imagen generation`);
   }} />;
   
   if (isShowingWelcome) return <WelcomeAnimation onAnimationEnd={() => { setIsShowingWelcome(false); setActiveView('home'); }} />;
@@ -392,8 +412,8 @@ const App: React.FC = () => {
                             <TerminalIcon className="w-5 h-5" />
                         </button>
 
-                        {/* API Key Status - Moved position */}
-                        <ApiKeyStatus 
+                        {/* API Key Status - Hidden from user */}
+                        {/* <ApiKeyStatus 
                             activeApiKey={activeApiKey} 
                             veoTokenRefreshedAt={veoTokenRefreshedAt} 
                             currentUser={currentUser}
@@ -401,11 +421,11 @@ const App: React.FC = () => {
                             onUserUpdate={handleUserUpdate}
                             onOpenChangeServerModal={() => setShowServerModal(true)}
                             language={language}
-                        />
+                        /> */}
 
                         {/* Menu Icon - Mobile Only */}
                         <button
-                            onClick={() => setIsMenuOpen(true)}
+                            onClick={() => setActiveView('settings')}
                             className="md:hidden p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
                         >
                             <MenuIcon className="w-5 h-5" />
@@ -416,7 +436,7 @@ const App: React.FC = () => {
 
             {/* Main Content Area - Responsive scrolling behavior */}
             {/* UPDATED: Removed fixed overflow to allow natural page scrolling on desktop */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 md:p-8 custom-scrollbar">
                 {/* Announcement Banner (Holographic Marquee) */}
                 {activeView === 'home' && announcements.length > 0 && (
                      <div className="mb-6 mx-auto max-w-[1600px] w-full bg-brand-start/10 dark:bg-brand-start/10 border border-brand-start/30 dark:border-brand-start/20 text-brand-start dark:text-white p-2 rounded-xl shadow-[0_0_15px_rgba(74,108,247,0.1)] dark:shadow-[0_0_15px_rgba(74,108,247,0.2)] flex items-center gap-3 animate-zoomIn relative overflow-hidden group">

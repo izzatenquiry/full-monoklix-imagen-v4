@@ -24,7 +24,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ currentUser, navigateTo }
   const QuickActionCard = ({ title, desc, icon: Icon, color, onClick, delay }: any) => (
       <button 
         onClick={onClick}
-        className={`holo-card p-6 flex flex-col items-start justify-between h-40 group hover:border-${color}-500/50 transition-all duration-500 animate-zoomIn`}
+        className={`holo-card p-4 md:p-6 flex flex-col items-start justify-between h-40 group hover:border-${color}-500/50 transition-all duration-500 animate-zoomIn`}
         style={{ animationDelay: `${delay}ms` }}
       >
           {/* Ambient Glow */}

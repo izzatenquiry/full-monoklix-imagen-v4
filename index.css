@@ -51,6 +51,18 @@
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 8px 32px rgba(0, 0, 0, 0.4);
   }
 
+  /* Mobile: Thinner border, more content space, focus on content */
+  @media (max-width: 768px) {
+    .holo-card {
+      @apply border-[0.5px] rounded-xl;
+      box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.02), 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+    
+    .dark .holo-card {
+      box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.015), 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+  }
+
   /* Interactive Elements */
   .holo-card-hover {
     @apply hover:border-white/10 hover:shadow-[0_0_30px_rgba(74,108,247,0.15)] hover:-translate-y-1;

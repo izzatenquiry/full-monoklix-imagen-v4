@@ -456,7 +456,7 @@ const GalleryView: React.FC<GalleryViewProps> = ({ onCreateVideo, onReEdit, lang
                 />
             </div>
 
-            <div className="flex-1 bg-white dark:bg-neutral-900 p-6 rounded-lg shadow-sm overflow-hidden flex flex-col min-h-0">
+            <div className="flex-1 bg-white dark:bg-neutral-900 p-4 md:p-6 rounded-lg shadow-sm overflow-hidden flex flex-col min-h-0">
                 {renderContent()}
             </div>
             

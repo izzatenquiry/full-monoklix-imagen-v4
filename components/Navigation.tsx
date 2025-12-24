@@ -32,6 +32,7 @@ const MAIN_NAV_ITEMS = [
   { id: 'ai-text-suite', icon: FileTextIcon, label: 'Text' },
   { id: 'ai-image-suite', icon: ImageIcon, label: 'Image' },
   { id: 'ai-prompt-library-suite', icon: SparklesIcon, label: 'Library' },
+  { id: 'gallery', icon: GalleryIcon, label: 'Gallery' },
 ];
 
 const SYSTEM_MODULES = [

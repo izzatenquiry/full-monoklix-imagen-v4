@@ -3,6 +3,8 @@ import { addLogEntry } from './aiLogService';
 import { type User } from '../types';
 import { supabase } from './supabaseClient';
 import { PROXY_SERVER_URLS } from './serverConfig';
+import { getAvailableServersForUser } from './userService';
+import { getAllTokens as getTokenPoolTokens } from './tokenPoolService';
 
 export const getVeoProxyUrl = (): string => {
   // CRITICAL: Always use localhost when running on localhost - ignore sessionStorage
@@ -59,7 +61,8 @@ const getPersonalTokenLocal = (): { token: string; createdAt: string; } | null =
 };
 
 // Fallback: Fetch fresh token from DB if missing locally
-const getFreshPersonalTokenFromDB = async (): Promise<string | null> => {
+// First tries to get personal token from users table, then falls back to latest token from token_new_active table
+const getFreshPersonalTokenFromDB = async (retryCount: number = 0): Promise<string | null> => {
     try {
         const userJson = localStorage.getItem('currentUser');
         if (!userJson) {
@@ -73,29 +76,74 @@ const getFreshPersonalTokenFromDB = async (): Promise<string | null> => {
             return null;
         }
 
-        console.log(`[API Client] Fetching token for user ${user.id} from DB...`);
-        const { data, error } = await supabase
+        console.log(`[API Client] Fetching personal token for user ${user.id} from users table... (attempt ${retryCount + 1})`);
+        // First, try to get personal token from users table
+        const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('personal_auth_token')
+            .select('id, personal_auth_token, updated_at')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
             
-        if (error) {
-            console.error('[API Client] Supabase error fetching token:', error);
+        if (userError) {
+            console.error('[API Client] Supabase error fetching user token:', userError);
+        }
+
+        if (userData && userData.personal_auth_token && typeof userData.personal_auth_token === 'string' && userData.personal_auth_token.trim().length > 0) {
+            // Update local storage to prevent future fetches
+            const updatedUser = { ...user, personalAuthToken: userData.personal_auth_token };
+            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            console.log('[API Client] ✅ Found personal token from users table and updated localStorage.');
+            return userData.personal_auth_token;
+        }
+
+        // If no personal token, fetch latest token from token_new_active table
+        console.log(`[API Client] No personal token found, fetching latest token from token_new_active table...`);
+        const { data: tokenData, error: tokenError } = await supabase
+            .from('token_new_active')
+            .select('token')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+            
+        if (tokenError) {
+            console.error('[API Client] Supabase error fetching token from token_new_active:', tokenError);
+            console.error('[API Client] Error details:', JSON.stringify(tokenError, null, 2));
+            // Retry on error if we haven't retried yet
+            if (retryCount < 2) {
+                console.log(`[API Client] Retrying token fetch in 1 second... (attempt ${retryCount + 2})`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return getFreshPersonalTokenFromDB(retryCount + 1);
+            }
             return null;
         }
 
-        if (data && data.personal_auth_token) {
-            // Update local storage to prevent future fetches
-            const updatedUser = { ...user, personalAuthToken: data.personal_auth_token };
-            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-            console.log('[API Client] Refreshed personal token from DB and updated localStorage.');
-            return data.personal_auth_token;
+        console.log('[API Client] DB query response from token_new_active:', { 
+            hasData: !!tokenData, 
+            hasToken: !!(tokenData?.token),
+            tokenLength: tokenData?.token?.length || 0,
+            tokenPreview: tokenData?.token ? `${tokenData.token.substring(0, 10)}...` : 'null'
+        });
+
+        if (tokenData && tokenData.token && typeof tokenData.token === 'string' && tokenData.token.trim().length > 0) {
+            console.log('[API Client] ✅ Found latest token from token_new_active table.');
+            return tokenData.token;
         } else {
-            console.warn('[API Client] DB query returned no token (null/empty).');
+            // If no token found, retry once more after a short delay (in case of replication delay)
+            if (retryCount < 1) {
+                console.log(`[API Client] No token found, retrying in 1.5 seconds... (attempt ${retryCount + 2})`);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                return getFreshPersonalTokenFromDB(retryCount + 1);
+            }
+            console.warn('[API Client] ⚠️ DB query returned no token (null/empty) after retries. Data:', tokenData);
         }
     } catch (e) {
         console.error("[API Client] Exception refreshing token from DB", e);
+        // Retry on exception if we haven't retried yet
+        if (retryCount < 2) {
+            console.log(`[API Client] Exception occurred, retrying in 1 second... (attempt ${retryCount + 2})`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return getFreshPersonalTokenFromDB(retryCount + 1);
+        }
     }
     return null;
 };
@@ -127,161 +175,250 @@ export const executeProxiedRequest = async (
   overrideServerUrl?: string // New parameter to force a specific server
 ): Promise<{ data: any; successfulToken: string; successfulServerUrl: string }> => {
   const isStatusCheck = logContext === 'VEO STATUS';
+  const isGenerationRequest = logContext.includes('GENERATE') || logContext.includes('RECIPE');
   
   if (!isStatusCheck) {
       console.log(`[API Client] Starting process for: ${logContext}`);
   }
   
-  // Use override URL if provided, otherwise default to standard proxy selection
-  const selectedUrl = serviceType === 'veo' ? getVeoProxyUrl() : getImagenProxyUrl();
-  let currentServerUrl = overrideServerUrl || selectedUrl;
+  // 2. Resolve Tokens and Servers for Hybrid Retry System
+  const currentUser = getCurrentUserInternal();
   
-  // CRITICAL: Force localhost if we're in localhost environment but URL is not localhost
+  // Get all available tokens (personal + pool)
+  const availableTokens: Array<{ token: string; source: 'Specific' | 'Personal' | 'RandomPool' }> = [];
+  
+  if (specificToken) {
+      availableTokens.push({ token: specificToken, source: 'Specific' });
+  } else {
+      // For imagen: Use personal token first, then fallback to pool tokens from session
+      // For veo: Use personal token if available, then fallback to token_new_active
+      if (serviceType === 'imagen') {
+          // Step 1: Try personal token first
+          const personalLocal = getPersonalTokenLocal();
+          if (personalLocal) {
+              availableTokens.push({ token: personalLocal.token, source: 'Personal' });
+          } else {
+              const freshToken = await getFreshPersonalTokenFromDB();
+              if (freshToken) {
+                  availableTokens.push({ token: freshToken, source: 'Personal' });
+              }
+          }
+          
+          // Step 2: Add pool tokens from session (fetched during login)
+          const poolTokens = getTokenPoolTokens();
+          poolTokens.forEach(token => {
+              // Avoid duplicates
+              if (!availableTokens.find(t => t.token === token)) {
+                  availableTokens.push({ token, source: 'RandomPool' });
+              }
+          });
+      } else {
+          // For veo: Use personal token if available
+          const personalLocal = getPersonalTokenLocal();
+          if (personalLocal) {
+              availableTokens.push({ token: personalLocal.token, source: 'Personal' });
+          } else {
+              const freshToken = await getFreshPersonalTokenFromDB();
+              if (freshToken) {
+                  availableTokens.push({ token: freshToken, source: 'Personal' });
+              }
+          }
+      }
+  }
+
+  if (availableTokens.length === 0) {
+      if (serviceType === 'imagen') {
+          console.error(`[API Client] Authentication failed. No token found in LocalStorage, DB, or token pool.`);
+          throw new Error(`Authentication failed: No token available. Please login to Flow or set your personal token in Settings > Token & API.`);
+      } else {
+          console.error(`[API Client] Authentication failed. No token found in LocalStorage or DB.`);
+          throw new Error(`Authentication failed: No Personal Token found. Please go to Settings > Token & API and set your token.`);
+      }
+  }
+
+  // Get all available servers
+  let availableServers: string[] = [];
+  if (overrideServerUrl) {
+      availableServers = [overrideServerUrl];
+  } else {
+      if (currentUser) {
+          availableServers = await getAvailableServersForUser(currentUser);
+      } else {
+          availableServers = PROXY_SERVER_URLS;
+      }
+      
+      // Filter by device if needed
+      const { getDeviceOS } = await import('./userService');
+      const { getServersForDevice } = await import('./serverConfig');
+      const deviceType = getDeviceOS();
+      const deviceServers = getServersForDevice(deviceType, availableServers);
+      if (deviceServers.length > 0) {
+          availableServers = deviceServers;
+      }
+      
+      // If user has selected server, prioritize it
+      const userSelectedServer = sessionStorage.getItem('selectedProxyServer');
+      if (userSelectedServer && availableServers.includes(userSelectedServer)) {
+          availableServers = [userSelectedServer, ...availableServers.filter(s => s !== userSelectedServer)];
+      }
+  }
+
+  // Handle localhost
   const hostname = window.location.hostname.toLowerCase();
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
   const isDevPort = window.location.port === '8080' || window.location.port === '3000';
   const isLocalEnv = isLocalhost || isDevPort;
   
-  if (isLocalEnv && !currentServerUrl.includes('localhost:3001')) {
-    console.warn(`[API Client] ⚠️ WARNING: Running on localhost (${hostname}:${window.location.port}) but selected URL is ${currentServerUrl}. Forcing localhost:3001.`);
-    currentServerUrl = 'http://localhost:3001';
+  if (isLocalEnv) {
+      availableServers = ['http://localhost:3001'];
   }
-  
-  // Debug logging for localhost detection
-  if (!isStatusCheck) {
-    console.log(`[API Client] Hostname: ${window.location.hostname}, Port: ${window.location.port}, IsLocalEnv: ${isLocalEnv}, Selected URL: ${currentServerUrl}`);
-  }
-  
-  // 1. Acquire Server Slot (Rate Limiting at Server Level)
-  const isGenerationRequest = logContext.includes('GENERATE') || logContext.includes('RECIPE');
-  
-  if (isGenerationRequest) {
-    if (onStatusUpdate) onStatusUpdate('Queueing...');
-    try {
-        await supabase.rpc('request_generation_slot', { cooldown_seconds: 10, server_url: currentServerUrl });
-    } catch (slotError) {
-        console.warn('Slot request failed, proceeding anyway:', slotError);
-    }
-    if (onStatusUpdate) onStatusUpdate('Processing...');
-  }
-  
-  // 2. Resolve Token
-  let finalToken = specificToken;
-  let sourceLabel: 'Specific' | 'Personal' = 'Specific';
 
-  if (!finalToken) {
-      // Step A: Check Local Storage
-      const personalLocal = getPersonalTokenLocal();
-      if (personalLocal) {
-          finalToken = personalLocal.token;
-          sourceLabel = 'Personal';
-      } 
+  // 3. Hybrid Retry System - Try different server/token combinations
+  const maxRetries = isGenerationRequest ? Math.min(availableServers.length * availableTokens.length, 10) : 1; // Max 10 combinations for generation
+  
+  let lastError: Error | null = null;
+  let triedCombinations = 0;
+  let slotRequested = false;
+  
+  // Shuffle servers and tokens for better distribution
+  const shuffledServers = [...availableServers].sort(() => Math.random() - 0.5);
+  const shuffledTokens = [...availableTokens].sort(() => Math.random() - 0.5);
+  
+  for (let serverIdx = 0; serverIdx < shuffledServers.length && triedCombinations < maxRetries; serverIdx++) {
+      const serverUrl = shuffledServers[serverIdx];
       
-      // Step B: If local missing, check Database
-      if (!finalToken) {
-          const freshToken = await getFreshPersonalTokenFromDB();
-          if (freshToken) {
-              finalToken = freshToken;
-              sourceLabel = 'Personal';
+      for (let tokenIdx = 0; tokenIdx < shuffledTokens.length && triedCombinations < maxRetries; tokenIdx++) {
+          const tokenInfo = shuffledTokens[tokenIdx];
+          triedCombinations++;
+          
+          try {
+              if (!isStatusCheck && triedCombinations > 1) {
+                  console.log(`[API Client] Retry attempt ${triedCombinations}/${maxRetries}: Trying ${tokenInfo.source} token on ${serverUrl}`);
+                  if (onStatusUpdate) {
+                      onStatusUpdate(`Retrying with different server/token (${triedCombinations}/${maxRetries})...`);
+                  }
+              }
+              
+              // Acquire server slot for generation requests (only once for first server)
+              if (isGenerationRequest && !slotRequested && triedCombinations === 1) {
+                  if (onStatusUpdate) onStatusUpdate('Queueing...');
+                  try {
+                      await supabase.rpc('request_generation_slot', { cooldown_seconds: 10, server_url: serverUrl });
+                      slotRequested = true;
+                  } catch (slotError) {
+                      console.warn('Slot request failed, proceeding anyway:', slotError);
+                  }
+                  if (onStatusUpdate) onStatusUpdate('Processing...');
+              }
+              
+              const endpoint = `${serverUrl}/api/${serviceType}${relativePath}`;
+              
+              if (!isStatusCheck && triedCombinations === 1) {
+                  console.log(`[API Client] Making request to: ${endpoint}`);
+                  console.log(`[API Client] Server URL: ${serverUrl}, Service: ${serviceType}, Path: ${relativePath}`);
+                  console.log(`[API Client] Using ${tokenInfo.source} token`);
+              }
+              
+              const response = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${tokenInfo.token}`,
+                      'x-user-username': currentUser?.username || 'unknown',
+                  },
+                  body: JSON.stringify(requestBody),
+              });
+
+              let data;
+              const textResponse = await response.text();
+              try {
+                  data = JSON.parse(textResponse);
+              } catch {
+                  data = { error: { message: `Proxy returned non-JSON (${response.status}): ${textResponse.substring(0, 100)}` } };
+              }
+
+              if (!response.ok) {
+                  const status = response.status;
+                  let errorMessage = data.error?.message || data.message || `API call failed (${status})`;
+                  const lowerMsg = errorMessage.toLowerCase();
+
+                  // Check for hard errors - don't retry these
+                  if (status === 400 || lowerMsg.includes('safety') || lowerMsg.includes('blocked') || lowerMsg.includes('invalid prompt')) {
+                      console.warn(`[API Client] 🛑 Non-retriable error (${status}). Prompt issue: ${errorMessage}`);
+                      throw new Error(`[${status}] ${errorMessage}`);
+                  }
+                  
+                  // For other errors, continue to next combination
+                  lastError = new Error(errorMessage);
+                  console.warn(`[API Client] ⚠️ Attempt ${triedCombinations} failed: ${errorMessage} (${serverUrl} + ${tokenInfo.source} token)`);
+                  continue; // Try next combination
+              }
+
+              // Success!
+              if (!isStatusCheck) {
+                  console.log(`✅ [API Client] Success using ${tokenInfo.source} token on ${serverUrl} (attempt ${triedCombinations})`);
+              }
+              return { data, successfulToken: tokenInfo.token, successfulServerUrl: serverUrl };
+              
+          } catch (error) {
+              const errMsg = error instanceof Error ? error.message : String(error);
+              
+              // Check if it's a hard error (don't retry)
+              const isHardError = errMsg.includes('[400]') || errMsg.toLowerCase().includes('safety') || errMsg.toLowerCase().includes('blocked') || errMsg.toLowerCase().includes('invalid prompt');
+              
+              if (isHardError) {
+                  // Don't retry hard errors
+                  if (!isStatusCheck) {
+                      addLogEntry({ 
+                          model: logContext, 
+                          prompt: `Failed using ${tokenInfo.source} token`, 
+                          output: errMsg, 
+                          tokenCount: 0, 
+                          status: 'Error', 
+                          error: errMsg 
+                      });
+                  }
+                  throw error; // Re-throw hard errors immediately
+              }
+              
+              // Network errors - continue to next combination
+              if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch') || errMsg.includes('ERR_')) {
+                  lastError = new Error(`Network error: Cannot connect to ${serverUrl}`);
+                  console.warn(`[API Client] ⚠️ Network error on ${serverUrl}, trying next server/token combination...`);
+                  continue;
+              }
+              
+              // Other errors - continue to next combination
+              lastError = error instanceof Error ? error : new Error(String(error));
+              console.warn(`[API Client] ⚠️ Attempt ${triedCombinations} failed: ${errMsg}`);
+              
+              // If we've tried all combinations, throw the last error
+              if (triedCombinations >= maxRetries) {
+                  break;
+              }
           }
       }
   }
-
-  if (!finalToken) {
-      console.error(`[API Client] Authentication failed. No token found in LocalStorage or DB.`);
-      throw new Error(`Authentication failed: No Personal Token found. Please go to Settings > Token & API and set your token.`);
-  }
-
-  // 3. Log
-  if (!isStatusCheck && sourceLabel === 'Personal') {
-      // console.log(`[API Client] Using Personal Token: ...${finalToken.slice(-6)}`);
-  }
-
-  const currentUser = getCurrentUserInternal();
   
-  // 4. Execute
-  try {
-      const endpoint = `${currentServerUrl}/api/${serviceType}${relativePath}`;
+  // All combinations failed
+  if (lastError) {
+      const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
       
       if (!isStatusCheck) {
-          console.log(`[API Client] Making request to: ${endpoint}`);
-          console.log(`[API Client] Server URL: ${currentServerUrl}, Service: ${serviceType}, Path: ${relativePath}`);
-      }
-      
-      const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${finalToken}`,
-              'x-user-username': currentUser?.username || 'unknown',
-          },
-          body: JSON.stringify(requestBody),
-      });
-
-      let data;
-      const textResponse = await response.text();
-      try {
-          data = JSON.parse(textResponse);
-      } catch {
-          data = { error: { message: `Proxy returned non-JSON (${response.status}): ${textResponse.substring(0, 100)}` } };
-      }
-
-      if (!response.ok) {
-          const status = response.status;
-          let errorMessage = data.error?.message || data.message || `API call failed (${status})`;
-          const lowerMsg = errorMessage.toLowerCase();
-
-          // Check for hard errors
-          if (status === 400 || lowerMsg.includes('safety') || lowerMsg.includes('blocked')) {
-              console.warn(`[API Client] 🛑 Non-retriable error (${status}). Prompt issue.`);
-              throw new Error(`[${status}] ${errorMessage}`);
-          }
-          
-          throw new Error(errorMessage);
-      }
-
-      if (!isStatusCheck) {
-          console.log(`✅ [API Client] Success using ${sourceLabel} token on ${currentServerUrl}`);
-      }
-      return { data, successfulToken: finalToken, successfulServerUrl: currentServerUrl };
-
-  } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      
-      // Better error handling for network errors (like failed to fetch)
-      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('fetch') || errMsg.includes('ERR_')) {
-          const hostname = window.location.hostname.toLowerCase();
-          const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
-          const isDevPort = window.location.port === '8080' || window.location.port === '3000';
-          const isLocalEnv = isLocalhost || isDevPort;
-          
-          let networkError = `Network error: Cannot connect to ${currentServerUrl}`;
-          
-          if (isLocalEnv && currentServerUrl.includes('localhost:3001')) {
-              networkError += `. Make sure the server is running. Start it with: cd server && npm start`;
-          } else if (isLocalEnv && !currentServerUrl.includes('localhost:3001')) {
-              networkError += `. ERROR: Running on localhost but trying to connect to ${currentServerUrl}. Should be using localhost:3001.`;
-          } else {
-              networkError += `. Please check if the server is accessible.`;
-          }
-          
-          console.error(`[API Client] ❌ ${networkError}`);
-          console.error(`[API Client] Endpoint attempted: ${currentServerUrl}/api/${serviceType}${relativePath}`);
-          throw new Error(networkError);
-      }
-      
-      const isSafetyError = errMsg.includes('[400]') || errMsg.toLowerCase().includes('safety') || errMsg.toLowerCase().includes('blocked');
-
-      if (!specificToken && !isSafetyError && !isStatusCheck) {
           addLogEntry({ 
               model: logContext, 
-              prompt: `Failed using ${sourceLabel} token`, 
+              prompt: `Failed after ${triedCombinations} attempts with different server/token combinations`, 
               output: errMsg, 
               tokenCount: 0, 
               status: 'Error', 
               error: errMsg 
           });
       }
-      throw error;
+      
+      console.error(`[API Client] ❌ All ${triedCombinations} server/token combinations failed. Last error: ${errMsg}`);
+      throw new Error(`Generation failed after trying ${triedCombinations} different server/token combinations. Last error: ${errMsg}`);
   }
+  
+  // Should never reach here, but just in case
+  throw new Error('Generation failed: No server/token combination available');
 };
